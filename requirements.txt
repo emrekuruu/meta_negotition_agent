@@ -12,3 +12,12 @@ Flask~=3.0.2
 Flask-Cors~=4.0.0
 python-dotenv
 
+# Reinforcement Learning
+tk 
+wandb
+gymnasium
+tensorboard
+pyinstrument
+stable-baselines3
+einops==0.8.0
+reformer-pytorch==1.4.4
