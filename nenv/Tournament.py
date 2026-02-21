@@ -18,13 +18,6 @@ from nenv.utils import ExcelLog, TournamentProcessMonitor
 
 _original_random_class = random.Random
 
-_gpu_queue = None
-
-def _init_worker_gpu(gpu_queue):
-    """Initialize worker process with GPU queue for conditional assignment."""
-    global _gpu_queue
-    _gpu_queue = gpu_queue
-
 def _configure_process_seed(seed: Optional[int]):
     """
     Configure deterministic randomness inside a worker process.
@@ -63,29 +56,21 @@ def run_single_session(session_data):
 
         _configure_process_seed(session_seed)
 
-        # Assign GPU if either agent is NegoformerAgent
-        global _gpu_queue
-        if _gpu_queue is not None and ('NegoformerAgent' in [agent_class_1_name, agent_class_2_name]):
-            gpu_id = _gpu_queue.get()
-            os.environ['WORKER_GPU_ID'] = str(gpu_id)
-
         # Import agent classes dynamically
         import importlib
         
         agent_mapping = {
+            'TrainedMimicAgent': 'agents.TrainedMimicAgent.TrainedMimicAgent.TrainedMimicAgent',
             'BoulwareAgent': 'agents.boulware.Boulware.BoulwareAgent',
             'MICROAgent': 'agents.MICRO.MICRO.MICROAgent', 
             'HybridAgent': 'agents.HybridAgent.HybridAgent.HybridAgent',
             'SAGAAgent': 'agents.SAGA.SAGAAgent.SAGAAgent',
             'ConcederAgent': 'agents.conceder.Conceder.ConcederAgent',
-            'ParetoWalkerAgent': 'agents.ParetoWalkerAgent.ParetoWalkerAgent.ParetoWalkerAgent',
-            'NegoformerAgent': 'agents.NegoformerAgent.NegoformerAgent.NegoformerAgent',
             'CUHKAgent': 'agents.CUHKAgent.CUHKAgent.CUHKAgent',
             "PonPokoAgent": "agents.PonPoko.PonPoko.PonPokoAgent",
             "NiceTitForTat": "agents.NiceTitForTat.NiceTitForTat.NiceTitForTat",
             "IAMhaggler": "agents.IAMhaggler.IAMhaggler.IAMhaggler",
             "HardHeaded": "agents.HardHeaded.KLH.HardHeaded",
-            "FakeoutAgent": "agents.FakeoutAgent.FakeoutAgent.FakeoutAgent",
         }
         
         
@@ -124,10 +109,8 @@ def run_single_session(session_data):
             deadline_time, deadline_round, estimators, logger_instances
         )
         
-        if os.getenv("OPPONENT_MODEL"):
-            session_path = session_path = f"{agent_class_1_name}_{agent_class_2_name}_Domain{domain_name}_{os.getenv('OPPONENT_MODEL')}.xlsx"
-        else:
-            session_path = session_path = f"{agent_class_1_name}_{agent_class_2_name}_Domain{domain_name}_Oracle.xlsx"
+
+        session_path = session_path = f"{agent_class_1_name}_{agent_class_2_name}_Domain{domain_name}.xlsx"
 
         full_session_path = os.path.join(result_dir, "sessions", session_path)
         
@@ -217,7 +200,7 @@ class Tournament:
         self.deadline_time = deadline_time
         self.deadline_round = deadline_round
         self.loggers = [logger_class(result_dir) for logger_class in set(logger_classes)]
-        self.result_dir = result_dir + os.getenv("NEGOFORMER_MODE") + "/" + os.getenv("DEADLINE_ROUND") + "/" + os.getenv("DOMAIN_NAME") + "/"
+        self.result_dir = result_dir 
         self.seed = seed
         self.repeat = repeat
         self.self_negotiation = self_negotiation
@@ -268,43 +251,20 @@ class Tournament:
         
         for i, (agent_class_1, agent_class_2, domain_name) in enumerate(negotiations):
 
-            if "NegoformerAgent" in [agent_class_1.__name__, agent_class_2.__name__]:
-                for file in os.listdir(os.path.join(self.result_dir, "sessions/")):
-                    file = file.split("Process")[0]
-                    if file == f"{agent_class_1.__name__}_{agent_class_2.__name__}_Domain{domain_name}_":
-                        break
-                else:
-                    # Only add session if no matching file was found
-                    session_seed = None if self.seed is None else self.seed + i
-                    session_data_list.append((i, agent_class_1.__name__, agent_class_2.__name__, domain_name,
-                        self.deadline_time, self.deadline_round, self.estimators, self.result_dir, session_seed))
-
-        # Count sessions with NegoformerAgent and detect GPUs
-        negoformer_sessions = sum(
-            1 for (_, a1, a2, _, _, _, _, _, _) in session_data_list
-            if 'NegoformerAgent' in [a1, a2]
-        )
-
-        gpu_queue = None
-        if negoformer_sessions > 0:
-            try:
-                import torch
-                num_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
-                if num_gpus > 0:
-                    from multiprocessing import Manager
-                    manager = Manager()
-                    gpu_queue = manager.Queue()
-                    for i in range(negoformer_sessions):
-                        gpu_queue.put(i % num_gpus)
-            except ImportError:
-                pass
+            for file in os.listdir(os.path.join(self.result_dir, "sessions/")):
+                file = file.split("Process")[0]
+                if file == f"{agent_class_1.__name__}_{agent_class_2.__name__}_Domain{domain_name}_":
+                    break
+            else:
+                # Only add session if no matching file was found
+                session_seed = None if self.seed is None else self.seed + i
+                session_data_list.append((i, agent_class_1.__name__, agent_class_2.__name__, domain_name,
+                    self.deadline_time, self.deadline_round, self.estimators, self.result_dir, session_seed))
 
         # Run sessions in parallel
         completed_sessions = []
         with ProcessPoolExecutor(
             max_workers=max_workers,
-            initializer=_init_worker_gpu if gpu_queue is not None else None,
-            initargs=(gpu_queue,) if gpu_queue is not None else ()
         ) as executor:
             future_to_session = {
                 executor.submit(run_single_session, session_data): session_data

@@ -29,19 +29,35 @@ class AbstractRewardFunction(ABC):
         env.our_agent            -- the AbstractRLAgent instance (for agent-specific state)
     """
 
+    def __init__(self):
+        self._last_dense = 0.0
+        self._last_terminal = 0.0
+
     def on_reset(self, env: 'NegotiationEnv') -> None:
         """
         Called at the start of each episode after agents are initialized.
 
         Override to reset per-episode state (e.g. baselines, running statistics).
         """
-        pass
+        self._last_dense = 0.0
+        self._last_terminal = 0.0
 
     def compute(self, env: 'NegotiationEnv') -> float:
         """Dispatches to dense_reward or terminal_reward based on env.done."""
         if env.done:
-            return self.terminal_reward(env)
-        return self.dense_reward(env)
+            self._last_terminal = self.terminal_reward(env)
+            self._last_dense = 0.0
+            return self._last_terminal
+        self._last_dense = self.dense_reward(env)
+        self._last_terminal = 0.0
+        return self._last_dense
+
+    def get_log_info(self) -> dict:
+        """Returns the last dense and terminal reward values for automatic logging."""
+        return {
+            "dense_reward": self._last_dense,
+            "terminal_reward": self._last_terminal,
+        }
 
     @abstractmethod
     def dense_reward(self, env: 'NegotiationEnv') -> float:

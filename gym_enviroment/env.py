@@ -1,7 +1,6 @@
 import itertools
 from typing import List, Type
 
-import numpy as np
 import gymnasium as gym
 
 from nenv import domain_loader
@@ -46,6 +45,10 @@ class NegotiationEnv(gym.Env):
         reward_fn: AbstractRewardFunction,
     ):
         super().__init__()
+        if not domains:
+            raise ValueError("domains must not be empty")
+        if not opponent_names:
+            raise ValueError("opponent_names must not be empty")
 
         self.our_agent_class = our_agent_class
         self.domains = domains
@@ -56,7 +59,6 @@ class NegotiationEnv(gym.Env):
         # Load opponent classes and build the cycling combination list
         self.opponents = [load_agent_class(path) for path in opponent_names]
         self.combinations = list(itertools.product(self.domains, self.opponents))
-        self.combination_index = 0
 
         # Spaces are declared by the agent class — no hardcoding here
         self.observation_space = our_agent_class.get_observation_space()
@@ -74,6 +76,8 @@ class NegotiationEnv(gym.Env):
         self.last_our_bid = None
         self.last_agreed_bid = None
         self.agreement_reached = False
+        self.current_domain_name = None
+        self.current_opponent_class = None
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -83,15 +87,17 @@ class NegotiationEnv(gym.Env):
         return self.our_agent.build_observation()
 
     def _get_info(self):
-        domain_name, opponent_class = self.combinations[self.combination_index - 1]
-        return {
+        info = {
             "round": self.current_round,
             "t": self.current_round / self.deadline_round,
-            "domain": domain_name,
-            "opponent": opponent_class.__name__,
+            "domain": self.current_domain_name,
+            "opponent": self.current_opponent_class.__name__,
             "agreement_reached": self.agreement_reached,
             "final_utility": self.final_utility,
         }
+        info.update(self.reward_fn.get_log_info())
+        info.update(self.our_agent.get_extra_info())
+        return info
 
     def _get_reward(self):
         return self.reward_fn.compute(self)
@@ -103,16 +109,16 @@ class NegotiationEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        # Cycle through domain × opponent combinations
-        domain_name, opponent_class = self.combinations[self.combination_index]
-        self.combination_index = (self.combination_index + 1) % len(self.combinations)
+        # Sample a domain-opponent pair for this episode.
+        combo_idx = int(self.np_random.integers(len(self.combinations)))
+        self.current_domain_name, self.current_opponent_class = self.combinations[combo_idx]
 
         # Load preferences for this domain
-        self.our_preference, self.opponent_preference = domain_loader(domain_name)
+        self.our_preference, self.opponent_preference = domain_loader(self.current_domain_name)
 
         # Instantiate agents
         self.our_agent = self.our_agent_class(self.our_preference, self.deadline_round, [])
-        self.opponent_agent = opponent_class(self.opponent_preference, self.deadline_round, [])
+        self.opponent_agent = self.current_opponent_class(self.opponent_preference, self.deadline_round, [])
 
         self.our_agent.initiate(self.opponent_agent.name)
         self.opponent_agent.initiate(self.our_agent.name)
@@ -132,6 +138,9 @@ class NegotiationEnv(gym.Env):
         return self._get_obs(), self._get_info()
 
     def step(self, action):
+        if self.done:
+            raise RuntimeError("Episode is done. Call reset() before step().")
+
         t = self.current_round / self.deadline_round
 
         # Forward opponent's last bid to our agent (if any)
@@ -142,8 +151,9 @@ class NegotiationEnv(gym.Env):
         self.our_agent.set_action(action)
         our_action = self.our_agent.act(t)
 
+        terminated = False
         if isinstance(our_action, Accept):
-            self.done = True
+            terminated = True
             self.agreement_reached = True
             self.last_agreed_bid = our_action.bid
             self.final_utility = self.our_preference.get_utility(our_action.bid)
@@ -153,7 +163,7 @@ class NegotiationEnv(gym.Env):
             opponent_action = self.opponent_agent.act(t)
 
             if isinstance(opponent_action, Accept):
-                self.done = True
+                terminated = True
                 self.agreement_reached = True
                 self.last_agreed_bid = opponent_action.bid
                 self.final_utility = self.our_preference.get_utility(opponent_action.bid)
@@ -162,13 +172,14 @@ class NegotiationEnv(gym.Env):
 
         self.current_round += 1
 
-        if self.current_round >= self.deadline_round:
-            self.done = True
+        truncated = (not terminated) and (self.current_round >= self.deadline_round)
+        if truncated:
             self.final_utility = self.our_preference.reservation_value
 
+        self.done = terminated or truncated
         reward = self._get_reward()
 
-        return self._get_obs(), reward, self.done, False, self._get_info()
+        return self._get_obs(), reward, terminated, truncated, self._get_info()
 
     def render(self):
         pass

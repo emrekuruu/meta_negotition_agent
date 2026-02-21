@@ -74,3 +74,20 @@ class AbstractRLAgent(AbstractAgent, ABC):
         Store the action here and use it inside act(t) to decide what to offer.
         """
         raise NotImplementedError
+
+    def get_extra_info(self) -> dict:
+        """
+        Return agent-specific metrics to include in the step info dict.
+
+        Override this to expose custom per-step data (e.g. internal targets,
+        model outputs, gap metrics) to W&B callbacks running in the main process.
+
+        The returned dict is merged into the info dict that NegotiationEnv
+        returns from step() and reset(). Keys must be serialisable across
+        subprocess boundaries (primitives only — no numpy arrays or objects).
+
+        Example:
+            def get_extra_info(self) -> dict:
+                return {"my_target": self._target, "gap": self._gap}
+        """
+        return {}

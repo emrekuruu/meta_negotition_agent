@@ -50,6 +50,8 @@ meta_negotition_agent/
 │   ├── config/
 │   │   ├── config.py            # Config loader
 │   │   └── default.yaml         # Training hyperparameters, domains, opponents
+│   ├── examples/                # Ready-to-run example agents
+│   │   └── mimic_agent.py       # MimicAgent — learns to replicate a reference strategy
 │   └── agent/                   # Your implementation lives here
 │       └── my_agent.py          # Fill in MyRLAgent + MyRewardFunction
 │
@@ -226,6 +228,38 @@ Additive utility: `U(bid) = Σ weight_i × value_utility_i`
 | `get_utility(bid) → float` | Utility of a bid in [0, 1] |
 | `get_bid_at(utility) → Bid` | Closest bid to a target utility (binary search) |
 | `reservation_value` | Minimum acceptable utility |
+
+---
+
+## Examples
+
+### MimicAgent (`gym_enviroment/examples/mimic_agent.py`)
+
+Learns to reproduce the bidding curve of any reference strategy. A useful sanity check and baseline: a well-trained MimicAgent should converge to the behaviour of its reference.
+
+| Component | Value |
+|---|---|
+| Observation | `[t, last_opp_bid_utility, mimic_target_utility]` |
+| Action | `[our_target_utility]` ∈ [0, 1] |
+| Dense reward | `-\|our_bid_utility − mimic_target_utility\|` |
+| Terminal reward | `+final_utility` on agreement, `-1.0` on deadline |
+
+The shadow agent (the reference strategy) is run in parallel each step and fed every opponent bid, so strategies that build opponent models stay fully in sync.
+
+```python
+from gym_enviroment.examples.mimic_agent import make_mimic_agent, MimicReward
+from agents.boulware.Boulware import BoulwareAgent
+
+MimicBoulware = make_mimic_agent(BoulwareAgent)
+
+env = NegotiationEnv(
+    our_agent_class=MimicBoulware,
+    domains=...,
+    deadline_round=...,
+    opponent_names=...,
+    reward_fn=MimicReward(),
+)
+```
 
 ---
 

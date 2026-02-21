@@ -28,6 +28,4 @@ from agents.HardHeaded.KLH import HardHeaded
 from agents.IAMhaggler.IAMhaggler import IAMhaggler
 from agents.LinearAgent.LinearAgent import LinearAgent
 from agents.LuckyAgent2022.LuckyAgent2022 import LuckyAgent2022
-from agents.NegoformerAgent.NegoformerAgent import NegoformerAgent
-from agents.ParetoWalkerAgent.ParetoWalkerAgent import ParetoWalkerAgent
-from agents.FakeoutAgent.FakeoutAgent import FakeoutAgent
+from agents.TrainedMimicAgent.TrainedMimicAgent import TrainedMimicAgent

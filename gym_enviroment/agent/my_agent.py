@@ -6,9 +6,10 @@ Fill in each method to define:
   - What the policy outputs   (get_action_space + set_action)
   - How the agent negotiates  (act + receive_offer + initiate)
   - How the agent is rewarded (MyRewardFunction)
+  - What gets logged to W&B   (get_extra_info)
 """
 
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
 import gymnasium as gym
@@ -117,3 +118,4 @@ class MyRewardFunction(AbstractRewardFunction):
             "Available: env.agreement_reached, env.final_utility, env.last_agreed_bid,\n"
             "           env.our_preference, env.opponent_preference"
         )
+

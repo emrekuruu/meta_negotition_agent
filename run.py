@@ -36,9 +36,9 @@ if __name__ == "__main__":
 
     configuration["agent_classes"] = set([load_agent_class(path) for path in configuration["agents"]])
     configuration["logger_classes"] = set([load_logger_class(path) for path in configuration["loggers"]])
-    configuration["estimator_classes"] = set([load_estimator_class(os.getenv("OPPONENT_MODEL"))]) if os.getenv("OPPONENT_MODEL") else set([load_estimator_class(path) for path in configuration["estimators"]])
-    configuration["domains"] = [os.getenv("DOMAIN_NAME")] if os.getenv("DOMAIN_NAME") else configuration["domains"]
-    configuration["deadline_round"] = int(os.getenv("DEADLINE_ROUND")) if os.getenv("DEADLINE_ROUND") else configuration["deadline_round"]
+    configuration["estimator_classes"] = set([load_estimator_class(path) for path in configuration["estimators"]])
+    configuration["domains"] = configuration["domains"]
+    configuration["deadline_round"] = int(configuration["deadline_round"])
     
     del configuration["agents"]
     del configuration["loggers"]

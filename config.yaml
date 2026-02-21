@@ -1,7 +1,7 @@
 ## Deadline
 # For a time-based deadline, you need to set a deadline (sec) as an integer value. Otherwise, set 'null' value.
 deadline_time: null
-deadline_round: 10000
+deadline_round: 100
 
 ## Agent
 # You need to define agents as a list of strings.
@@ -9,19 +9,8 @@ deadline_round: 10000
 # You can either write the class name from 'agents' Python module or full path to the class.
 # Note that the class must be a subclass of 'AbstractAgent' class.
 agents: [ 
-        "NegoformerAgent",
+        "TrainedMimicAgent",
         "ConcederAgent", 
-        # "FakeoutAgent",
-        # "ConcederAgent",
-        # "HybridAgent",
-        # "CUHKAgent",
-        # "HybridAgent",
-        # "MICROAgent", 
-        # "SAGAAgent", 
-        # "NiceTitForTat",
-        # "IAMhaggler",
-        # "HardHeaded",
-        # "PonPokoAgent",
         ]
 
 ## Logger
@@ -45,7 +34,7 @@ loggers: ['BidSpaceLogger']
 #     "WHOLE": [14, 46, 11, 43, 13, 45, 10, 42, 7, 39, 9, 41, 12, 44, 6, 38, 5, 37]
 # }
 
-domains : ["X"]
+domains : ["30"]
 
 ## Opponent Model
 # You can define opponent models as a list of strings.

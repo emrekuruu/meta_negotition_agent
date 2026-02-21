@@ -1,0 +1,52 @@
+import glob as _glob
+from typing import Optional, ClassVar
+
+import numpy as np
+
+from nenv import Offer
+from nenv.Action import Action
+from nenv.Agent import AbstractAgent
+from nenv.Bid import Bid
+
+
+class TrainedMimicAgent(AbstractAgent):
+    """
+    Tournament agent that runs a PPO policy trained by MimicAgent.
+
+    Set artifact_path to your W&B artifact before running a tournament:
+
+        TrainedMimicAgent.artifact_path = "entity/project/model-run-name:latest"
+
+    The model is loaded once on first initiate() and shared across all sessions.
+    """
+
+    artifact_path: str = "emre-kuru-zye-in-niversitesi/negotiation-rl/checkpoint-td6ocdre-100000:v0"
+    _model: ClassVar = None  # loaded once, shared across all instances
+
+    @property
+    def name(self) -> str:
+        return "TrainedMimicAgent"
+
+    def initiate(self, opponent_name: Optional[str]) -> None:
+        if TrainedMimicAgent._model is None:
+            import wandb
+            from stable_baselines3 import PPO
+
+            api = wandb.Api()
+            artifact = api.artifact(self.artifact_path)
+            model_dir = artifact.download()
+            model_files = sorted(_glob.glob(f"{model_dir}/*.zip"))
+            TrainedMimicAgent._model = PPO.load(model_files[-1])
+
+    def receive_offer(self, bid: Bid, t: float) -> None:
+        pass
+
+    def act(self, t: float) -> Action:
+        obs = np.array([t], dtype=np.float32)
+        action, _ = self._model.predict(obs, deterministic=True)
+        target = float(np.clip(action[0], self.preference.reservation_value, 1.0))
+        print(f"{target:.4f}", flush=True)
+        bid = self.preference.get_bid_at(target)
+        if self.can_accept() and bid <= self.last_received_bids[-1]:
+            return self.accept_action
+        return Offer(bid)
