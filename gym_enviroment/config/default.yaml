@@ -1,0 +1,78 @@
+core:
+  seed: 42
+  sequence_length: 96
+  negotiation_features: 12
+  max_candidates: 6
+  forecast_length: 336
+  statistical_features: 9
+  simulation_bids_count: 15
+  nash_features_per_point: 1  
+  max_history_points: 96      
+  training: true
+  
+agent:
+  forecasting:
+    label_len: 48       
+
+feature_extractor:
+  hidden_size: 128
+  dropout: 0.1
+  features_dim: 256 
+
+environment:
+  n_envs: 11
+  deadline_round: 1000
+  domains: ['5', '6', '7', '9', '10', '11', '12', '13', '14', '21', '22', '23', '25', '26', '27', '28', '29', '30', '37', '38', '39', '41', '42', '43', '44', '45', '46']
+  
+  opponents: [ "agents.BoulwareAgent",
+               "agents.ConcederAgent", 
+               "agents.HybridAgent", 
+               "agents.MICROAgent", 
+               "agents.CUHKAgent", 
+               "agents.YXAgent", 
+               "agents.PonPokoAgent", 
+               "agents.SAGAAgent", 
+               "agents.Rubick", 
+               "agents.Kawaii", 
+               "agents.Atlas3Agent"]
+
+training:
+  learning_rate: 0.00005
+  n_steps: 1000 
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.995
+  gae_lambda: 0.95
+  clip_range: 0.2
+  max_grad_norm: 0.5
+  vf_coef: 0.5
+  ent_coef: 0.01
+  target_kl: 0.05
+
+rewards:
+  # Enable/disable reward components
+  use_terminal_reward: true
+  use_nash_reward: false
+  use_strategy_fit_reward: true
+  
+  # Reward weights
+  nash_weight: 1.0
+  strategy_fit_weight: 1.0
+  terminal_weight: 1.0
+  no_agreement_penalty: -1.0     # Increased penalty from -0.5
+
+  # Early episode end punishment
+  use_early_end_punishment: true
+  early_end_threshold: 100  # Minimum rounds before normal terminal reward
+  early_end_penalty: -1   # Punishment for ending before threshold
+  
+logging:
+  log_level: "INFO"
+  wandb:
+    project: "negoformer"
+    entity: null
+    group: "ppo_training"
+  checkpoint_freq: 10000
+
+
+  
