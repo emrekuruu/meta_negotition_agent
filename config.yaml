@@ -1,0 +1,79 @@
+## Deadline
+# For a time-based deadline, you need to set a deadline (sec) as an integer value. Otherwise, set 'null' value.
+deadline_time: null
+deadline_round: 10000
+
+## Agent
+# You need to define agents as a list of strings.
+# Each string represents the class name of an agent.
+# You can either write the class name from 'agents' Python module or full path to the class.
+# Note that the class must be a subclass of 'AbstractAgent' class.
+agents: [ 
+        "NegoformerAgent",
+        "ConcederAgent", 
+        # "FakeoutAgent",
+        # "ConcederAgent",
+        # "HybridAgent",
+        # "CUHKAgent",
+        # "HybridAgent",
+        # "MICROAgent", 
+        # "SAGAAgent", 
+        # "NiceTitForTat",
+        # "IAMhaggler",
+        # "HardHeaded",
+        # "PonPokoAgent",
+        ]
+
+## Logger
+# You can define loggers as a list of strings.
+# Each string represents the class name of a logger.
+# You can either write the class name from 'nenv.logger' Python module or full path to the class.
+# Note that the class must be a subclass of 'AbstractLogger' class.
+loggers: ['BidSpaceLogger']
+
+# TEST_DOMAINS = {
+#     "LARGE": [30, 27, 29],
+#     "MEDIUM": [26, 23, 25],
+#     "SMALL": [28, 22, 21],
+#     "WHOLE": [30, 27, 29, 26, 23, 25, 28, 22, 21]
+# }
+
+# TRAINING_DOMAINS = {
+#     "LARGE": [14, 46, 11, 43, 13, 45],
+#     "MEDIUM": [10, 42, 7, 39, 9, 41],
+#     "SMALL": [12, 44, 6, 38, 5, 37],
+#     "WHOLE": [14, 46, 11, 43, 13, 45, 10, 42, 7, 39, 9, 41, 12, 44, 6, 38, 5, 37]
+# }
+
+domains : ["X"]
+
+## Opponent Model
+# You can define opponent models as a list of strings.
+# Each string represents the class name of an opponent model.
+# You can either write the class name from 'nenv.OpponentModel' Python module or full path to the class.
+# Note that the class must be a subclass of 'AbstractOpponentModel' class
+
+estimators: [
+        #      "ClassicFrequencyOpponentModel",
+        #      "CUHKOpponentModel",
+        #      "BayesianOpponentModel",
+        #      "WindowedFrequencyOpponentModel",
+        #      "ConflictBasedOpponentModel",
+        #      "RegressionCOMBOpponentModel",
+        #      "StepwiseCOMBOpponentModel",
+        #      "ExpectationCOMBOpponentModel",
+             ]
+
+## Other
+# Whether an agent will negotiate with itself.
+self_negotiation: False
+# The number of times an agent will negotiate with another agent in the same domain.
+repeat: 1
+# Where the results will be logged. Note that this directory will be cleaned before the tournament starts.
+result_dir: 'results/'
+# Random seed for build-in Python random and NumPy.
+seed: 1234
+# Once all combinations have been decided, this parameter determines whether the session order will be random or not.
+shuffle: False
+
+drawing_format: plotly
