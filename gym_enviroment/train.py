@@ -12,7 +12,7 @@ from gym_enviroment.config.config import config
 # ------------------------------------------------------------------
 # Plug in your agent and reward function here
 # ------------------------------------------------------------------
-from gym_enviroment.my_agent import MyRLAgent, MyRewardFunction
+from gym_enviroment.agent.my_agent import MyRLAgent, MyRewardFunction
 
 
 CONFIG = {
