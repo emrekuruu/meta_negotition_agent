@@ -194,29 +194,47 @@ class MimicReward(AbstractRewardFunction):
     Reward function paired with MimicAgent.
     """
 
+    DIRECTION_EPS: float = 1e-4
+
     def on_reset(self, env) -> None:
         super().on_reset(env)
         self._episode_dense_total = 0.0
         self._episode_dense_rewards = []
         self._normalized_total_dense_reward = 0.0
+        self._prev_agent_target = None
+        self._prev_shadow_target = None
 
     def dense_reward(self, env) -> float:
-
         if env.last_our_bid is None:
             return 0.0
 
         t = env.current_round / env.deadline_round
         our_utility = float(env.our_agent._target_utility)
+        shadow_utility = float(env.our_agent._mimic_target)
 
-        if our_utility > env.our_agent._mimic_target:
-            reward = (env.our_agent._mimic_target / (our_utility + 0.00001)) * t
+        if our_utility > shadow_utility:
+            reward = (shadow_utility / (our_utility + 0.00001)) * t
         else:
-            reward = (our_utility / (env.our_agent._mimic_target + 0.00001)) * t 
+            reward = (our_utility / (shadow_utility + 0.00001)) * t
+
+        # Directional consistency gate:
+        # - If shadow concedes (utility goes down), agent must also go down.
+        # - If shadow hardens (utility goes up), agent must not go down.
+        if self._prev_agent_target is not None and self._prev_shadow_target is not None:
+            shadow_delta = shadow_utility - self._prev_shadow_target
+            agent_delta = our_utility - self._prev_agent_target
+
+            if shadow_delta < -self.DIRECTION_EPS and agent_delta >= -self.DIRECTION_EPS:
+                reward = 0.0
+            elif shadow_delta > self.DIRECTION_EPS and agent_delta < -self.DIRECTION_EPS:
+                reward = 0.0
+
+        self._prev_agent_target = our_utility
+        self._prev_shadow_target = shadow_utility
 
         self._episode_dense_total += reward
         self._episode_dense_rewards.append(reward)
         return reward
-        
 
     def terminal_reward(self, env) -> float:
         acceptance_round = env.current_round if env.agreement_reached else env.deadline_round
