@@ -118,6 +118,14 @@ class RolloutNormalizedDenseCallback(BaseCallback):
         if values:
             self.logger.record("rollout/normalized_total_dense_reward_mean", safe_mean(values))
 
+        direction_values = [
+            ep_info["direction_correct_rate"]
+            for ep_info in ep_info_buffer
+            if "direction_correct_rate" in ep_info
+        ]
+        if direction_values:
+            self.logger.record("rollout/direction_correct_rate_mean", safe_mean(direction_values))
+
         self._log_coverage_bars()
 
 
