@@ -38,4 +38,4 @@ logging:
   wandb:
     project: "negotiation-rl"
     entity: null
-  checkpoint_freq: 100000  # save a model artifact every N timesteps
+  checkpoint_freq: 1000  # save a model artifact every N timesteps

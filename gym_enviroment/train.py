@@ -1,4 +1,3 @@
-import os
 import warnings
 
 import wandb
@@ -6,12 +5,12 @@ from wandb.integration.sb3 import WandbCallback
 from sklearn.exceptions import ConvergenceWarning
 
 from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import BaseCallback, CallbackList
+from stable_baselines3.common.callbacks import CallbackList
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.utils import safe_mean
 from stable_baselines3.common.vec_env import DummyVecEnv
 
+from gym_enviroment.callbacks import ArtifactCheckpointCallback, RolloutNormalizedDenseCallback
 from gym_enviroment.config.config import config
 from gym_enviroment.env import NegotiationEnv
 
@@ -47,104 +46,6 @@ CONFIG = {
     "device": config.core["device"],
     "policy_hidden_sizes": config.training.get("policy_hidden_sizes", [128, 128, 64]),
 }
-
-class RolloutNormalizedDenseCallback(BaseCallback):
-    def __init__(self):
-        super().__init__()
-        self._episode_count_by_opponent = {}
-        self._episode_count_by_domain = {}
-
-    def _on_step(self) -> bool:
-        infos = self.locals.get("infos", [])
-        dones = self.locals.get("dones", [])
-
-        for info, done in zip(infos, dones):
-            if not done:
-                continue
-
-            opponent = str(info.get("opponent", "unknown"))
-            domain = str(info.get("domain", "unknown"))
-
-            self._episode_count_by_opponent[opponent] = self._episode_count_by_opponent.get(opponent, 0) + 1
-            self._episode_count_by_domain[domain] = self._episode_count_by_domain.get(domain, 0) + 1
-
-        return True
-
-    def _log_coverage_bars(self) -> None:
-        if self._episode_count_by_opponent:
-            opponent_table = wandb.Table(columns=["opponent", "episodes"])
-            for opponent, count in sorted(self._episode_count_by_opponent.items(), key=lambda item: item[0]):
-                opponent_table.add_data(opponent, count)
-            wandb.log(
-                {
-                    "coverage/episodes_by_opponent": wandb.plot.bar(
-                        opponent_table,
-                        "opponent",
-                        "episodes",
-                        title="Episode Coverage by Opponent",
-                    )
-                },
-                step=self.num_timesteps,
-            )
-
-        if self._episode_count_by_domain:
-            domain_table = wandb.Table(columns=["domain", "episodes"])
-            for domain, count in sorted(self._episode_count_by_domain.items(), key=lambda item: item[0]):
-                domain_table.add_data(domain, count)
-            wandb.log(
-                {
-                    "coverage/episodes_by_domain": wandb.plot.bar(
-                        domain_table,
-                        "domain",
-                        "episodes",
-                        title="Episode Coverage by Domain",
-                    )
-                },
-                step=self.num_timesteps,
-            )
-
-    def _on_rollout_end(self) -> None:
-        ep_info_buffer = getattr(self.model, "ep_info_buffer", None)
-        if not ep_info_buffer:
-            return
-        values = [
-            ep_info["normalized_total_dense_reward"]
-            for ep_info in ep_info_buffer
-            if "normalized_total_dense_reward" in ep_info
-        ]
-        if values:
-            self.logger.record("rollout/normalized_total_dense_reward_mean", safe_mean(values))
-        self._log_coverage_bars()
-
-
-class ArtifactCheckpointCallback(BaseCallback):
-    def __init__(self, run, checkpoint_freq: int, save_path: str):
-        super().__init__()
-        self.run = run
-        self.checkpoint_freq = int(checkpoint_freq)
-        self.save_path = save_path
-        self._last_checkpoint = 0
-        os.makedirs(self.save_path, exist_ok=True)
-
-    def _on_step(self) -> bool:
-        if self.checkpoint_freq <= 0:
-            return True
-        if self.num_timesteps - self._last_checkpoint < self.checkpoint_freq:
-            return True
-
-        self._last_checkpoint = self.num_timesteps
-        checkpoint_base = os.path.join(self.save_path, f"model_{self.num_timesteps}")
-        self.model.save(checkpoint_base)
-
-        artifact = wandb.Artifact(
-            name=f"checkpoint-{self.run.id}-{self.num_timesteps}",
-            type="model",
-            metadata={"timestep": self.num_timesteps},
-        )
-        artifact.add_file(f"{checkpoint_base}.zip")
-        self.run.log_artifact(artifact)
-        return True
-
 
 def make_env_fn(rank: int):
     def _thunk():
