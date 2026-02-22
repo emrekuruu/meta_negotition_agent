@@ -16,21 +16,31 @@ from nenv.OpponentModel import BayesianOpponentModel
 
 from agents.HybridAgent.HybridAgent import HybridAgent
 
+from gym_enviroment.config.config import config
 from gym_enviroment.rl_agent import AbstractRLAgent
 from gym_enviroment.reward import AbstractRewardFunction
+
+
+def _normalize_opponent_label(label: str) -> str:
+    normalized = "".join(ch for ch in label.lower() if ch.isalnum())
+    if normalized.endswith("agent"):
+        normalized = normalized[:-5]
+    return normalized
 
 
 class MimicAgent(AbstractRLAgent):
     """
     RL agent that learns to reproduce the bidding curve of a reference strategy.
 
-    Observation space (2 + 2 * BID_WINDOW,):
+    Observation space (2 + 2 * BID_WINDOW + OPPONENT_TYPE_DIM,):
         [0] t                      -- normalised negotiation time in [0, 1]
         [1] last_our_offer_u       -- utility of our previous offer (own utility)
         [2:2+BID_WINDOW]           -- last BID_WINDOW opponent bid utilities
                                       in own-utility scale, zero-padded on the left
-        [2+BID_WINDOW:]            -- last BID_WINDOW estimated opponent-self utilities
+        [2+BID_WINDOW:2+2*BID_WINDOW]
+                                   -- last BID_WINDOW estimated opponent-self utilities
                                       from BayesianOpponentModel, zero-padded on the left
+        [2+2*BID_WINDOW:]          -- one-hot opponent type (+1 unknown bucket)
 
     Action space (1,):
         [0] normalized_target      -- normalized target in [-1, 1], mapped to
@@ -43,6 +53,10 @@ class MimicAgent(AbstractRLAgent):
 
     mimic_class: Type[AbstractAgent] = HybridAgent
     BID_WINDOW: int = 5
+    OPPONENT_LABELS = [
+        _normalize_opponent_label(name) for name in config.environment.get("opponents", [])
+    ]
+    OPPONENT_TYPE_DIM: int = len(OPPONENT_LABELS) + 1
 
     # ------------------------------------------------------------------
     # Spaces
@@ -50,7 +64,12 @@ class MimicAgent(AbstractRLAgent):
 
     @classmethod
     def get_observation_space(cls) -> gym.Space:
-        return spaces.Box(low=0.0, high=1.0, shape=(2 + 2 * cls.BID_WINDOW,), dtype=np.float32)
+        return spaces.Box(
+            low=0.0,
+            high=1.0,
+            shape=(2 + 2 * cls.BID_WINDOW + cls.OPPONENT_TYPE_DIM,),
+            dtype=np.float32,
+        )
 
     @classmethod
     def get_action_space(cls) -> gym.Space:
@@ -73,6 +92,16 @@ class MimicAgent(AbstractRLAgent):
         self._mimic_target = 1.0
         self._last_our_offer_utility = 1.0
         self._last_t = 0.0
+        self._opponent_type_onehot = [0.0] * self.OPPONENT_TYPE_DIM
+        if opponent_name is not None:
+            normalized = _normalize_opponent_label(opponent_name)
+            try:
+                idx = self.OPPONENT_LABELS.index(normalized)
+            except ValueError:
+                idx = self.OPPONENT_TYPE_DIM - 1
+            self._opponent_type_onehot[idx] = 1.0
+        else:
+            self._opponent_type_onehot[self.OPPONENT_TYPE_DIM - 1] = 1.0
         self._opp_estimated_utils = []
         self._opponent_model = BayesianOpponentModel(self.preference)
         self._shadow_accepted = False
@@ -104,7 +133,13 @@ class MimicAgent(AbstractRLAgent):
         recent_opp = self._opp_estimated_utils[-self.BID_WINDOW:]
         padded_recent_opp = [0.0] * (self.BID_WINDOW - len(recent_opp)) + recent_opp
 
-        obs = [self._last_t, self._last_our_offer_utility] + padded_recent_our + padded_recent_opp
+        obs = [
+            self._last_t,
+            self._last_our_offer_utility,
+            *padded_recent_our,
+            *padded_recent_opp,
+            *self._opponent_type_onehot,
+        ]
         return np.array(obs, dtype=np.float32)
 
     def act(self, t: float) -> Action:
@@ -174,7 +209,7 @@ class MimicReward(AbstractRewardFunction):
         if our_utility > env.our_agent._mimic_target:
             reward = (env.our_agent._mimic_target / (our_utility + 0.00001)) * t
         else:
-            reward = (our_utility / (env.our_agent._mimic_target + 0.00001))
+            reward = (our_utility / (env.our_agent._mimic_target + 0.00001)) * t 
 
         self._episode_dense_total += reward
         return reward

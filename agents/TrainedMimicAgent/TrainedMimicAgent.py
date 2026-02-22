@@ -8,6 +8,14 @@ from nenv.Action import Action
 from nenv.Agent import AbstractAgent
 from nenv.Bid import Bid
 from nenv.OpponentModel import BayesianOpponentModel
+from gym_enviroment.config.config import config
+
+
+def _normalize_opponent_label(label: str) -> str:
+    normalized = "".join(ch for ch in label.lower() if ch.isalnum())
+    if normalized.endswith("agent"):
+        normalized = normalized[:-5]
+    return normalized
 
 
 class TrainedMimicAgent(AbstractAgent):
@@ -21,9 +29,13 @@ class TrainedMimicAgent(AbstractAgent):
     The model is loaded once on first initiate() and shared across all sessions.
     """
 
-    artifact_path: str = "emre-kuru-zye-in-niversitesi/negotiation-rl/checkpoint-ger7py32-400000:v0"
+    artifact_path: str = "emre-kuru-zye-in-niversitesi/negotiation-rl/checkpoint-b5szwzuy-300000:v0"
     _model: ClassVar = None  # loaded once, shared across all instances
     BID_WINDOW: ClassVar[int] = 5
+    OPPONENT_LABELS: ClassVar[list[str]] = [
+        _normalize_opponent_label(name) for name in config.environment.get("opponents", [])
+    ]
+    OPPONENT_TYPE_DIM: ClassVar[int] = len(OPPONENT_LABELS) + 1
 
     @property
     def name(self) -> str:
@@ -42,6 +54,16 @@ class TrainedMimicAgent(AbstractAgent):
 
         # Mirror training-time observation semantics.
         self._last_our_offer_utility = 1.0
+        self._opponent_type_onehot = [0.0] * self.OPPONENT_TYPE_DIM
+        if opponent_name is not None:
+            normalized = _normalize_opponent_label(opponent_name)
+            try:
+                idx = self.OPPONENT_LABELS.index(normalized)
+            except ValueError:
+                idx = self.OPPONENT_TYPE_DIM - 1
+            self._opponent_type_onehot[idx] = 1.0
+        else:
+            self._opponent_type_onehot[self.OPPONENT_TYPE_DIM - 1] = 1.0
         self._opp_estimated_utils = []
         self._opponent_model = BayesianOpponentModel(self.preference)
 
@@ -57,7 +79,10 @@ class TrainedMimicAgent(AbstractAgent):
         recent_opp = self._opp_estimated_utils[-self.BID_WINDOW:]
         padded_recent_opp = [0.0] * (self.BID_WINDOW - len(recent_opp)) + recent_opp
 
-        obs = np.array([t, self._last_our_offer_utility] + padded_recent_our + padded_recent_opp, dtype=np.float32)
+        obs = np.array(
+            [t, self._last_our_offer_utility] + padded_recent_our + padded_recent_opp + self._opponent_type_onehot,
+            dtype=np.float32,
+        )
 
         action, _ = self._model.predict(obs, deterministic=True)
         raw = float(np.clip(action[0], -1.0, 1.0))
