@@ -2,7 +2,7 @@ core:
   seed: 42
 
 environment:
-  n_envs: 1
+  n_envs: 4
   deadline_round: 100
   domains: ['5', '6', '7', '9', '10', '11', '12',
             '13', '14', '21', '22', '23', '25', '26', '27', '28', '29',
@@ -23,9 +23,13 @@ environment:
 
 training:
   total_timesteps: 10000000
+  # PPO rollout buffer size per update. n_steps is derived as:
+  #   n_steps = rollout_buffer_size / n_envs
+  # Must be divisible by n_envs.
+  rollout_buffer_size: 256
+  batch_size: 64
+
   learning_rate: 5.0e-4   # SB3 PPO default
-  n_steps: 256           # SB3 PPO default
-  batch_size: 16          # SB3 PPO default
   n_epochs: 10            # SB3 PPO default
   gamma: 0.99             # SB3 PPO default
   clip_range: 0.2
@@ -38,4 +42,4 @@ logging:
   wandb:
     project: "negotiation-rl"
     entity: null
-  checkpoint_freq: 1000  # save a model artifact every N timesteps
+  checkpoint_freq: 100000  # save a model artifact every N timesteps

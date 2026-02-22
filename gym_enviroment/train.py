@@ -8,7 +8,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CallbackList
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from gym_enviroment.callbacks import ArtifactCheckpointCallback, RolloutNormalizedDenseCallback
 from gym_enviroment.config.config import config
@@ -35,7 +35,12 @@ CONFIG = {
     "n_envs": int(config.environment.get("n_envs", 1)),
     "seed": int(config.core.get("seed", 0)),
     "learning_rate": config.training["learning_rate"],
-    "n_steps": int(config.training["n_steps"]),
+    "rollout_buffer_size": int(
+        config.training.get(
+            "rollout_buffer_size",
+            int(config.training.get("n_steps", 256)) * int(config.environment.get("n_envs", 1)),
+        )
+    ),
     "batch_size": int(config.training["batch_size"]),
     "n_epochs": int(config.training["n_epochs"]),
     "gamma": config.training["gamma"],
@@ -47,6 +52,44 @@ CONFIG = {
     "policy_hidden_sizes": config.training.get("policy_hidden_sizes", [128, 128, 64]),
 }
 
+
+def _use_subproc_vec_env() -> bool:
+    return CONFIG["n_envs"] > 1
+
+
+def _validate_rollout_config() -> None:
+    rollout_buffer_size = CONFIG["rollout_buffer_size"]
+    n_envs = CONFIG["n_envs"]
+    batch_size = CONFIG["batch_size"]
+
+    if rollout_buffer_size <= 0:
+        raise ValueError("training.rollout_buffer_size must be > 0")
+    if n_envs <= 0:
+        raise ValueError("environment.n_envs must be > 0")
+    if batch_size <= 0:
+        raise ValueError("training.batch_size must be > 0")
+
+    if rollout_buffer_size % n_envs != 0:
+        raise ValueError(
+            "training.rollout_buffer_size must be divisible by environment.n_envs. "
+            f"Got rollout_buffer_size={rollout_buffer_size}, n_envs={n_envs}."
+        )
+
+    n_steps = rollout_buffer_size // n_envs
+    CONFIG["n_steps"] = n_steps
+
+    if batch_size > rollout_buffer_size:
+        raise ValueError(
+            f"training.batch_size ({batch_size}) cannot exceed rollout buffer size "
+            f"({rollout_buffer_size})."
+        )
+    if rollout_buffer_size % batch_size != 0:
+        raise ValueError(
+            "training.rollout_buffer_size must be divisible by training.batch_size for clean PPO minibatches. "
+            f"Got rollout_buffer_size={rollout_buffer_size}, batch_size={batch_size}."
+        )
+
+
 def make_env_fn(rank: int):
     def _thunk():
         env = NegotiationEnv(
@@ -56,7 +99,6 @@ def make_env_fn(rank: int):
             opponent_names=CONFIG["opponents"],
             reward_fn=MyRewardFunction(),
         )
-        env.reset(seed=CONFIG["seed"] + rank)
         return Monitor(env, info_keywords=("normalized_total_dense_reward",))
 
     return _thunk
@@ -64,11 +106,22 @@ def make_env_fn(rank: int):
 
 def build_vec_env():
     env_fns = [make_env_fn(rank) for rank in range(CONFIG["n_envs"])]
-    return DummyVecEnv(env_fns)
+    if _use_subproc_vec_env():
+        vec_env = SubprocVecEnv(env_fns)
+    else:
+        vec_env = DummyVecEnv(env_fns)
+    vec_env.seed(CONFIG["seed"])
+    return vec_env
 
 
 def main():
+    _validate_rollout_config()
     print(f"Total timesteps: {CONFIG['total_timesteps']}", flush=True)
+    print(
+        f"Vec env: {'subproc' if _use_subproc_vec_env() else 'dummy'} (n_envs={CONFIG['n_envs']}), "
+        f"rollout buffer={CONFIG['rollout_buffer_size']}, n_steps={CONFIG['n_steps']}",
+        flush=True,
+    )
 
     run = wandb.init(
         project=config.logging["wandb"]["project"],
