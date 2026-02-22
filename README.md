@@ -1,4 +1,4 @@
-# Meta Negotiation Agent
+# NegoRL
 
 A Gymnasium-based reinforcement learning extension built on top of [**NegoLog**](https://github.com/aniltrue/NegoLog) (IJCAI 2024) — an integrated Python framework for automated negotiation research.
 
