@@ -48,7 +48,7 @@ CONFIG = {
     "policy_hidden_sizes": config.training.get("policy_hidden_sizes", [128, 128, 64]),
 }
 
-class RolloutDensePerLenCallback(BaseCallback):
+class RolloutNormalizedDenseCallback(BaseCallback):
     def _on_step(self) -> bool:
         return True
 
@@ -57,12 +57,12 @@ class RolloutDensePerLenCallback(BaseCallback):
         if not ep_info_buffer:
             return
         values = [
-            ep_info["dense_reward_per_episode_length"]
+            ep_info["normalized_total_dense_reward"]
             for ep_info in ep_info_buffer
-            if "dense_reward_per_episode_length" in ep_info
+            if "normalized_total_dense_reward" in ep_info
         ]
         if values:
-            self.logger.record("rollout/dense_reward_per_episode_length_mean", safe_mean(values))
+            self.logger.record("rollout/normalized_total_dense_reward_mean", safe_mean(values))
 
 
 class ArtifactCheckpointCallback(BaseCallback):
@@ -104,7 +104,7 @@ def make_env_fn(rank: int):
             reward_fn=MyRewardFunction(),
         )
         env.reset(seed=CONFIG["seed"] + rank)
-        return Monitor(env, info_keywords=("dense_reward_per_episode_length",))
+        return Monitor(env, info_keywords=("normalized_total_dense_reward",))
 
     return _thunk
 
@@ -171,7 +171,7 @@ def main():
             save_path=f"{run.dir}/checkpoints",
         ))
 
-    callbacks.append(RolloutDensePerLenCallback())
+    callbacks.append(RolloutNormalizedDenseCallback())
 
     callbacks.append(WandbCallback(
         gradient_save_freq=0,

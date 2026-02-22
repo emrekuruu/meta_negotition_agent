@@ -131,7 +131,7 @@ class MimicAgent(AbstractRLAgent):
         padded_recent_our = [0.0] * (self.BID_WINDOW - len(recent_our)) + recent_our
 
         recent_opp = self._opp_estimated_utils[-self.BID_WINDOW:]
-        padded_recent_opp = [0.0] * (self.BID_WINDOW - len(recent_opp)) + recent_opp
+        padded_recent_opp = [1.0] * (self.BID_WINDOW - len(recent_opp)) + recent_opp
 
         obs = [
             self._last_t,
@@ -140,6 +140,8 @@ class MimicAgent(AbstractRLAgent):
             *padded_recent_opp,
             *self._opponent_type_onehot,
         ]
+
+        print(f"Opponent: {self._opponent_type_onehot}")
         return np.array(obs, dtype=np.float32)
 
     def act(self, t: float) -> Action:
@@ -196,7 +198,8 @@ class MimicReward(AbstractRewardFunction):
     def on_reset(self, env) -> None:
         super().on_reset(env)
         self._episode_dense_total = 0.0
-        self._dense_reward_per_episode_length = 0.0
+        self._episode_dense_rewards = []
+        self._normalized_total_dense_reward = 0.0
 
     def dense_reward(self, env) -> float:
 
@@ -212,16 +215,21 @@ class MimicReward(AbstractRewardFunction):
             reward = (our_utility / (env.our_agent._mimic_target + 0.00001)) * t 
 
         self._episode_dense_total += reward
+        self._episode_dense_rewards.append(reward)
         return reward
         
 
     def terminal_reward(self, env) -> float:
         acceptance_round = env.current_round if env.agreement_reached else env.deadline_round
-        self._dense_reward_per_episode_length = self._episode_dense_total / max(acceptance_round, 1)
+        weight_sum = sum(round_idx / env.deadline_round for round_idx in range(1, acceptance_round + 1))
+        if weight_sum > 0.0:
+            self._normalized_total_dense_reward = sum(self._episode_dense_rewards) / weight_sum
+        else:
+            self._normalized_total_dense_reward = 0.0
         return 0.0
 
     def get_log_info(self) -> dict:
         info = super().get_log_info()
         info["dense_reward_total_episode"] = self._episode_dense_total
-        info["dense_reward_per_episode_length"] = self._dense_reward_per_episode_length
+        info["normalized_total_dense_reward"] = self._normalized_total_dense_reward
         return info
