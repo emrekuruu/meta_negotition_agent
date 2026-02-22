@@ -99,7 +99,7 @@ def make_env_fn(rank: int):
             opponent_names=CONFIG["opponents"],
             reward_fn=MyRewardFunction(),
         )
-        return Monitor(env, info_keywords=("normalized_total_dense_reward",))
+        return Monitor(env, info_keywords=("normalized_total_dense_reward", "direction_correct_rate"))
 
     return _thunk
 

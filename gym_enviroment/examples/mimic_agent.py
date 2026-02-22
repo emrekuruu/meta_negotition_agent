@@ -203,6 +203,9 @@ class MimicReward(AbstractRewardFunction):
         self._normalized_total_dense_reward = 0.0
         self._prev_agent_target = None
         self._prev_shadow_target = None
+        self._direction_eval_count = 0
+        self._direction_correct_count = 0
+        self._direction_correct_rate = 0.0
 
     def dense_reward(self, env) -> float:
         if env.last_our_bid is None:
@@ -217,16 +220,30 @@ class MimicReward(AbstractRewardFunction):
         else:
             reward = (our_utility / (shadow_utility + 0.00001)) * t
 
-        # Directional consistency gate:
-        # - If shadow concedes (utility goes down), agent must also go down.
-        # - If shadow hardens (utility goes up), agent must not go down.
+        # Directional consistency gate (strict):
+        # - If shadow goes down, agent must go down.
+        # - If shadow goes up, agent must go up.
+        # - If shadow stays flat, agent must stay flat.
         if self._prev_agent_target is not None and self._prev_shadow_target is not None:
             shadow_delta = shadow_utility - self._prev_shadow_target
             agent_delta = our_utility - self._prev_agent_target
 
-            if shadow_delta < -self.DIRECTION_EPS and agent_delta >= -self.DIRECTION_EPS:
-                reward = 0.0
-            elif shadow_delta > self.DIRECTION_EPS and agent_delta < -self.DIRECTION_EPS:
+            def _direction(delta: float) -> int:
+                if delta > self.DIRECTION_EPS:
+                    return 1
+                if delta < -self.DIRECTION_EPS:
+                    return -1
+                return 0
+
+            shadow_dir = _direction(shadow_delta)
+            agent_dir = _direction(agent_delta)
+
+            self._direction_eval_count += 1
+            direction_correct = shadow_dir == agent_dir
+
+            if direction_correct:
+                self._direction_correct_count += 1
+            else:
                 reward = 0.0
 
         self._prev_agent_target = our_utility
@@ -243,10 +260,17 @@ class MimicReward(AbstractRewardFunction):
             self._normalized_total_dense_reward = sum(self._episode_dense_rewards) / weight_sum
         else:
             self._normalized_total_dense_reward = 0.0
+
+        if self._direction_eval_count > 0:
+            self._direction_correct_rate = self._direction_correct_count / self._direction_eval_count
+        else:
+            self._direction_correct_rate = 0.0
+
         return 0.0
 
     def get_log_info(self) -> dict:
         info = super().get_log_info()
         info["dense_reward_total_episode"] = self._episode_dense_total
         info["normalized_total_dense_reward"] = self._normalized_total_dense_reward
+        info["direction_correct_rate"] = self._direction_correct_rate
         return info
