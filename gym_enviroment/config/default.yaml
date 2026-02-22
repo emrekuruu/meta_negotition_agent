@@ -26,8 +26,8 @@ training:
   # PPO rollout buffer size per update. n_steps is derived as:
   #   n_steps = rollout_buffer_size / n_envs
   # Must be divisible by n_envs.
-  rollout_buffer_size: 256
-  batch_size: 64
+  rollout_buffer_size: 2048
+  batch_size: 128
 
   learning_rate: 5.0e-4   # SB3 PPO default
   n_epochs: 10            # SB3 PPO default

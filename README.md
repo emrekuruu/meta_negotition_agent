@@ -46,6 +46,7 @@ meta_negotition_agent/
 │   ├── env.py                   # NegotiationEnv (Gymnasium-compatible)
 │   ├── rl_agent.py              # AbstractRLAgent — extend this for your agent
 │   ├── reward.py                # AbstractRewardFunction — extend this for your reward
+│   ├── callbacks.py             # Training callbacks (rollout metrics + checkpoints)
 │   ├── train.py                 # Training entry point (PPO via Stable-Baselines3)
 │   ├── config/
 │   │   ├── config.py            # Config loader
@@ -179,7 +180,53 @@ Set your opponent pool, domains, deadline, and PPO hyperparameters. All agents i
 python -m gym_enviroment.train
 ```
 
-Training uses PPO (Stable-Baselines3) across parallel environments, one opponent per worker. Metrics are logged to W&B and TensorBoard.
+Training usesStable-Baselines3 with vectorized environments. Each episode samples from the configured domain/opponent pool, and metrics are logged to W&B and TensorBoard.
+
+---
+
+## Training Config (default.yaml)
+
+The default training config is centered on a single intuitive PPO sampling knob:
+
+- `training.rollout_buffer_size`
+  - total samples per PPO update
+  - derived internally: `n_steps = rollout_buffer_size / n_envs`
+
+Parallel env policy in `gym_enviroment/train.py`:
+
+- `n_envs == 1` -> `DummyVecEnv`
+- `n_envs > 1` -> `SubprocVecEnv` (SB3 default start method)
+
+Validation rules enforced at startup:
+
+- `rollout_buffer_size % n_envs == 0`
+- `rollout_buffer_size % batch_size == 0`
+- `batch_size <= rollout_buffer_size`
+
+This keeps the config simple for end users while preserving PPO correctness.
+
+---
+
+## Default Metrics and Logging
+
+Built-in SB3 metrics:
+
+- `rollout/ep_rew_mean`
+- `rollout/ep_len_mean`
+- PPO diagnostics under `train/*` (KL, entropy, value loss, etc.)
+
+Custom metrics and charts added in this project:
+
+- `coverage/episodes_by_opponent` (W&B bar chart)
+- `coverage/episodes_by_domain` (W&B bar chart)
+
+![Coverage Charts](assets/coverage.png)
+
+Checkpoint behavior:
+
+- checkpoints are logged under one run-scoped artifact name
+- each checkpoint is a new artifact version (`v0`, `v1`, ...)
+- aliases include `latest` and `step-<timesteps>`
 
 ---
 
@@ -239,10 +286,11 @@ Learns to reproduce the bidding curve of any reference strategy. A useful sanity
 
 | Component | Value |
 |---|---|
-| Observation | `[t, last_opp_bid_utility, mimic_target_utility]` |
-| Action | `[our_target_utility]` ∈ [0, 1] |
-| Dense reward | `-\|our_bid_utility − mimic_target_utility\|` |
-| Terminal reward | `+final_utility` on agreement, `-1.0` on deadline |
+| Observation | `[t, last_our_offer_u, last_5_opp_utils(ours), last_5_opp_utils(estimated opponent), opponent_type_onehot]` |
+| Action | normalized target in `[-1, 1]` mapped to `[0, 1]` |
+| Dense reward | utility-ratio shaping against shadow target, scaled by `t` |
+| Terminal reward | `0.0` |
+| Episode metric | `normalized_total_dense_reward` |
 
 The shadow agent (the reference strategy) is run in parallel each step and fed every opponent bid, so strategies that build opponent models stay fully in sync.
 
