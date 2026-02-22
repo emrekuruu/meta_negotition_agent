@@ -4,7 +4,7 @@ import wandb
 from wandb.integration.sb3 import WandbCallback
 from sklearn.exceptions import ConvergenceWarning
 
-from stable_baselines3 import PPO
+from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.callbacks import CallbackList
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.monitor import Monitor
@@ -28,7 +28,7 @@ warnings.filterwarnings(
 
 
 CONFIG = {
-    "algorithm": "PPO",
+    "algorithm": "RecurrentPPO",
     "domains": config.environment["domains"],
     "opponents": config.environment["opponents"],
     "deadline_round": int(config.environment["deadline_round"]),
@@ -50,6 +50,10 @@ CONFIG = {
     "total_timesteps": int(config.training.get("total_timesteps", 200_000)),
     "device": config.core["device"],
     "policy_hidden_sizes": config.training.get("policy_hidden_sizes", [128, 128, 64]),
+    "lstm_hidden_size": int(config.training.get("lstm_hidden_size", 128)),
+    "n_lstm_layers": int(config.training.get("n_lstm_layers", 1)),
+    "shared_lstm": bool(config.training.get("shared_lstm", False)),
+    "enable_critic_lstm": bool(config.training.get("enable_critic_lstm", True)),
 }
 
 
@@ -115,11 +119,17 @@ def build_vec_env():
 
 
 def main():
+    if RecurrentPPO is None:
+        raise ImportError(
+            "RecurrentPPO requires sb3-contrib. Install it with: pip install sb3-contrib"
+        )
+
     _validate_rollout_config()
     print(f"Total timesteps: {CONFIG['total_timesteps']}", flush=True)
     print(
         f"Vec env: {'subproc' if _use_subproc_vec_env() else 'dummy'} (n_envs={CONFIG['n_envs']}), "
-        f"rollout buffer={CONFIG['rollout_buffer_size']}, n_steps={CONFIG['n_steps']}",
+        f"rollout buffer={CONFIG['rollout_buffer_size']}, n_steps={CONFIG['n_steps']}, "
+        f"lstm_hidden_size={CONFIG['lstm_hidden_size']}, n_lstm_layers={CONFIG['n_lstm_layers']}",
         flush=True,
     )
 
@@ -147,11 +157,15 @@ def main():
         "net_arch": {
             "pi": policy_hidden_sizes,
             "vf": policy_hidden_sizes,
-        }
+        },
+        "lstm_hidden_size": CONFIG["lstm_hidden_size"],
+        "n_lstm_layers": CONFIG["n_lstm_layers"],
+        "shared_lstm": CONFIG["shared_lstm"],
+        "enable_critic_lstm": CONFIG["enable_critic_lstm"],
     }
 
-    model = PPO(
-        "MlpPolicy",
+    model = RecurrentPPO(
+        "MlpLstmPolicy",
         vec_env,
         learning_rate=CONFIG["learning_rate"],
         n_steps=CONFIG["n_steps"],

@@ -47,7 +47,7 @@ meta_negotition_agent/
 │   ├── rl_agent.py              # AbstractRLAgent — extend this for your agent
 │   ├── reward.py                # AbstractRewardFunction — extend this for your reward
 │   ├── callbacks.py             # Training callbacks (rollout metrics + checkpoints)
-│   ├── train.py                 # Training entry point (PPO via Stable-Baselines3)
+│   ├── train.py                 # Training entry point (RecurrentPPO via SB3-Contrib)
 │   ├── config/
 │   │   ├── config.py            # Config loader
 │   │   └── training_config.yaml         # Training hyperparameters, domains, opponents
@@ -172,7 +172,7 @@ class MyRewardFunction(AbstractRewardFunction):
 
 ### Step 2 — Configure `gym_enviroment/config/training_config.yaml`
 
-Set your opponent pool, domains, deadline, and PPO hyperparameters. All agents in `opponents` must be importable subclasses of `AbstractAgent`.
+Set your opponent pool, domains, deadline, and RecurrentPPO hyperparameters. All agents in `opponents` must be importable subclasses of `AbstractAgent`.
 
 ### Step 3 — Train
 
@@ -180,13 +180,13 @@ Set your opponent pool, domains, deadline, and PPO hyperparameters. All agents i
 python -m gym_enviroment.train
 ```
 
-Training usesStable-Baselines3 with vectorized environments. Each episode samples from the configured domain/opponent pool, and metrics are logged to W&B and TensorBoard.
+Training uses SB3-Contrib RecurrentPPO (`MlpLstmPolicy`) with vectorized environments. Each episode samples from the configured domain/opponent pool, and metrics are logged to W&B and TensorBoard.
 
 ---
 
 ## Training Config (training_config.yaml)
 
-The training configuration is centered on a single intuitive PPO sampling knob:
+The training configuration is centered on a single intuitive rollout sampling knob:
 
 - `training.rollout_buffer_size`
   - total samples per PPO update
@@ -203,7 +203,14 @@ Validation rules enforced at startup:
 - `rollout_buffer_size % batch_size == 0`
 - `batch_size <= rollout_buffer_size`
 
-This keeps the configuration simple for end users while preserving PPO correctness.
+Recurrent policy knobs (optional):
+
+- `training.lstm_hidden_size`
+- `training.n_lstm_layers`
+- `training.shared_lstm`
+- `training.enable_critic_lstm`
+
+This keeps the configuration simple for end users while preserving RecurrentPPO batch correctness.
 
 ---
 
@@ -213,7 +220,7 @@ Built-in SB3 metrics:
 
 - `rollout/ep_rew_mean`
 - `rollout/ep_len_mean`
-- PPO diagnostics under `train/*` (KL, entropy, value loss, etc.)
+- RecurrentPPO diagnostics under `train/*` (KL, entropy, value loss, etc.)
 
 Custom metrics and charts added in this project:
 

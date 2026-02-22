@@ -20,7 +20,7 @@ class GymConfig:
         """Load configuration from YAML file."""
         if config_path is None:
             # Default to the default.yaml in the same directory
-            config_path = os.path.join(os.path.dirname(__file__), 'default.yaml')
+            config_path = os.path.join(os.path.dirname(__file__), 'training_config.yaml')
 
         with open(config_path, 'r') as f:
             self._config = yaml.safe_load(f)

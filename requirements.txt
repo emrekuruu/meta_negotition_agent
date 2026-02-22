@@ -19,3 +19,4 @@ wandb
 gymnasium
 tensorboard
 stable-baselines3
+sb3-contrib

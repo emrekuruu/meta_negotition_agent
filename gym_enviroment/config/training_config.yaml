@@ -8,13 +8,13 @@ environment:
             '13', '14', '21', '22', '23', '25', '26', '27', '28', '29',
             '30', '37', '38', '39' ]
 
-  opponents: [ 
-        "ConcederAgent", 
+  opponents: [
+        "ConcederAgent",
         "BoulwareAgent",
         "HybridAgent",
         "CUHKAgent",
-        "MICROAgent", 
-        "SAGAAgent", 
+        "MICROAgent",
+        "SAGAAgent",
         "NiceTitForTat",
         "IAMhaggler",
         "HardHeaded",
@@ -33,9 +33,17 @@ training:
   n_epochs: 10            # SB3 PPO default
   gamma: 0.99             # SB3 PPO default
   clip_range: 0.2
-  ent_coef: 0.001           # slightly higher exploration on target head
+  ent_coef: 0.001         # slightly higher exploration on target head
   target_kl: 0.01         # SB3 PPO default (disabled)
+
+  # Feed-forward feature extractor before recurrent head.
   policy_hidden_sizes: [128, 128, 64]
+
+  # RecurrentPPO (MlpLstmPolicy) defaults.
+  lstm_hidden_size: 128
+  n_lstm_layers: 1
+  shared_lstm: false
+  enable_critic_lstm: true
 
 logging:
   log_level: "INFO"
