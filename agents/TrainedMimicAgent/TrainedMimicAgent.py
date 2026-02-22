@@ -7,7 +7,6 @@ from nenv import Offer
 from nenv.Action import Action
 from nenv.Agent import AbstractAgent
 from nenv.Bid import Bid
-from agents.HybridAgent.HybridAgent import HybridAgent
 
 
 class TrainedMimicAgent(AbstractAgent):
@@ -41,21 +40,17 @@ class TrainedMimicAgent(AbstractAgent):
             TrainedMimicAgent._model = PPO.load(model_files[-1])
 
         # Mirror training-time observation semantics.
-        self._shadow = HybridAgent(self.preference, self.session_time, [])
-        self._shadow.initiate(opponent_name)
-        self._last_shadow_offer_utility = 1.0
+        self._last_our_offer_utility = 1.0
 
     def receive_offer(self, bid: Bid, t: float) -> None:
-        self._shadow.receive_bid(bid, t)
+        # No-op: this policy currently uses only time and bid-utility history.
+        pass
 
     def act(self, t: float) -> Action:
-        shadow_action = self._shadow.act(t)
-        self._last_shadow_offer_utility = self.preference.get_utility(shadow_action.bid)
-
         opp_utils = [bid.utility for bid in self.last_received_bids]
         recent = opp_utils[-self.BID_WINDOW:]
         padded_recent = [0.0] * (self.BID_WINDOW - len(recent)) + recent
-        obs = np.array([t, self._last_shadow_offer_utility] + padded_recent, dtype=np.float32)
+        obs = np.array([t, self._last_our_offer_utility] + padded_recent, dtype=np.float32)
 
         action, _ = self._model.predict(obs, deterministic=True)
         raw = float(np.clip(action[0], -1.0, 1.0))
@@ -63,4 +58,5 @@ class TrainedMimicAgent(AbstractAgent):
         bid = self.preference.get_bid_at(target)
         if self.can_accept() and bid <= self.last_received_bids[-1]:
             return self.accept_action
+        self._last_our_offer_utility = bid.utility
         return Offer(bid)

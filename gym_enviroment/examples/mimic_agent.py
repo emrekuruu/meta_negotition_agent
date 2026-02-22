@@ -25,7 +25,7 @@ class MimicAgent(AbstractRLAgent):
 
     Observation space (2 + BID_WINDOW,):
         [0] t                      -- normalised negotiation time in [0, 1]
-        [1] last_shadow_offer_u    -- utility of the last shadow offer (own utility)
+        [1] last_our_offer_u       -- utility of our previous offer (own utility)
         [2:] recent_opp_utils      -- last BID_WINDOW opponent bid utilities
                                       in own-utility scale, zero-padded on the left
 
@@ -68,7 +68,7 @@ class MimicAgent(AbstractRLAgent):
         self._action = None
         self._target_utility = 1.0
         self._mimic_target = 1.0
-        self._last_shadow_offer_utility = 1.0
+        self._last_our_offer_utility = 1.0
         self._last_t = 0.0
         self._shadow_accepted = False
         self._shadow_accept_round = None
@@ -93,7 +93,8 @@ class MimicAgent(AbstractRLAgent):
         opp_utils = [bid.utility for bid in self.last_received_bids]
         recent = opp_utils[-self.BID_WINDOW:]
         padded_recent = [0.0] * (self.BID_WINDOW - len(recent)) + recent
-        obs = [self._last_t, self._last_shadow_offer_utility] + padded_recent
+        obs = [self._last_t, self._last_our_offer_utility] + padded_recent
+        print(f"Observation: t={obs[0]:.2f}, last_our_offer_u={obs[1]:.2f}, recent_opp_utils={obs[2:]}")
         return np.array(obs, dtype=np.float32)
 
     def act(self, t: float) -> Action:
@@ -107,7 +108,7 @@ class MimicAgent(AbstractRLAgent):
                 self._shadow_accept_round = round(t * self.session_time)
         else:
             self._mimic_target = self.preference.get_utility(shadow_action.bid)
-            self._last_shadow_offer_utility = self._mimic_target
+            self._last_our_offer_utility = self._mimic_target
 
         self._target_utility = self.preference.get_bid_at(self._target_utility).utility
         
