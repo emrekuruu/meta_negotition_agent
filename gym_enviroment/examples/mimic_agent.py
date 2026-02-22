@@ -39,7 +39,7 @@ class MimicAgent(AbstractRLAgent):
     """
 
     mimic_class: Type[AbstractAgent] = HybridAgent
-    BID_WINDOW: int = 4
+    BID_WINDOW: int = 5
 
     # ------------------------------------------------------------------
     # Spaces
@@ -90,7 +90,7 @@ class MimicAgent(AbstractRLAgent):
         self._target_utility = 0.5 * (raw + 1.0)
 
     def build_observation(self) -> np.ndarray:
-        opp_utils = [bid.utility for bid in self.last_received_bids]
+        opp_utils = [self.preference.get_utility(bid) for bid in self.last_received_bids]
         recent = opp_utils[-self.BID_WINDOW:]
         padded_recent = [0.0] * (self.BID_WINDOW - len(recent)) + recent
         obs = [self._last_t, self._last_our_offer_utility] + padded_recent

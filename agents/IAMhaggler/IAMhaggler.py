@@ -3,10 +3,12 @@ Complete rewrite of IAMhaggler to exactly match Java implementation.
 Based on IAMhaggler2011 from ANAC 2012.
 """
 import math
+import warnings
 import numpy as np
 from typing import List, Optional, Tuple
 from scipy.special import erf as scipy_erf
 from sklearn.gaussian_process import GaussianProcessRegressor, kernels
+from sklearn.exceptions import ConvergenceWarning
 import nenv
 
 
@@ -83,7 +85,12 @@ class IAMhaggler(nenv.AbstractAgent):
         # Initialize GP (Java lines 104-112)
         # Note: Java uses GaussianProcessRegressionBMC with priors
         # We use scikit-learn GP as close approximation
-        kernel = kernels.Matern(nu=1.5) + kernels.WhiteKernel()
+        # The data can be nearly noiseless; allow smaller noise floor to avoid
+        # hitting the default lower bound too early.
+        kernel = kernels.Matern(nu=1.5) + kernels.WhiteKernel(
+            noise_level=1e-6,
+            noise_level_bounds=(1e-10, 1e1),
+        )
         self.gp = GaussianProcessRegressor(kernel, alpha=1e-6, normalize_y=False)
         self._gp_X = []  # Accumulated training data
         self._gp_y = []
@@ -231,7 +238,13 @@ class IAMhaggler(nenv.AbstractAgent):
                 # Train GP on all accumulated data
                 X_train = np.array(self._gp_X)
                 y_train = np.array(self._gp_y).ravel()
-                self.gp.fit(X_train, y_train)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        category=ConvergenceWarning,
+                        message=r".*k2__noise_level is close to the specified lower bound.*",
+                    )
+                    self.gp.fit(X_train, y_train)
 
                 # Predict on time samples (Java lines 319-320)
                 time_samples_col = self.timeSamples.T  # Convert to column for prediction

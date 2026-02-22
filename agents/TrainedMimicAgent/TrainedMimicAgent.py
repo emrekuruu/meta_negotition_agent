@@ -22,7 +22,7 @@ class TrainedMimicAgent(AbstractAgent):
 
     artifact_path: str = "emre-kuru-zye-in-niversitesi/negotiation-rl/checkpoint-9iwphhmq-100000:v0"
     _model: ClassVar = None  # loaded once, shared across all instances
-    BID_WINDOW: ClassVar[int] = 4
+    BID_WINDOW: ClassVar[int] = 5
 
     @property
     def name(self) -> str:
