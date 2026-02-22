@@ -20,7 +20,7 @@ class TrainedMimicAgent(AbstractAgent):
     The model is loaded once on first initiate() and shared across all sessions.
     """
 
-    artifact_path: str = "emre-kuru-zye-in-niversitesi/negotiation-rl/checkpoint-td6ocdre-100000:v0"
+    artifact_path: str = "emre-kuru-zye-in-niversitesi/negotiation-rl/checkpoint-mkghnjmm-100000:v0"
     _model: ClassVar = None  # loaded once, shared across all instances
 
     @property
@@ -44,8 +44,8 @@ class TrainedMimicAgent(AbstractAgent):
     def act(self, t: float) -> Action:
         obs = np.array([t], dtype=np.float32)
         action, _ = self._model.predict(obs, deterministic=True)
-        target = float(np.clip(action[0], self.preference.reservation_value, 1.0))
-        print(f"{target:.4f}", flush=True)
+        raw = float(np.clip(action[0], -1.0, 1.0))
+        target = float(np.clip(0.5 * (raw + 1.0), self.preference.reservation_value, 1.0))
         bid = self.preference.get_bid_at(target)
         if self.can_accept() and bid <= self.last_received_bids[-1]:
             return self.accept_action

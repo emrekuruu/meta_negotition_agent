@@ -13,7 +13,7 @@ from nenv.Action import Action
 from nenv.Agent import AbstractAgent
 from nenv.Bid import Bid
 
-from agents.conceder.Conceder import ConcederAgent
+from agents.HybridAgent.HybridAgent import HybridAgent
 
 from gym_enviroment.rl_agent import AbstractRLAgent
 from gym_enviroment.reward import AbstractRewardFunction
@@ -27,15 +27,15 @@ class MimicAgent(AbstractRLAgent):
         [0] t                      -- normalised negotiation time in [0, 1]
 
     Action space (1,):
-        [0] our_target_utility     -- bid utility to target this round, clipped to
-                                      [reservation_value, 1.0] at execution time
+        [0] normalized_target      -- normalized target in [-1, 1], mapped to
+                                      utility target in [0, 1] for reward shaping
 
     The shadow agent (the one being mimicked) is kept perfectly in sync: it receives
     every opponent bid and its act() is called each round so its internal state
     (opponent models, time curves, etc.) evolves exactly as it would in a real session.
     """
 
-    mimic_class: Type[AbstractAgent] = ConcederAgent
+    mimic_class: Type[AbstractAgent] = HybridAgent
 
     # ------------------------------------------------------------------
     # Spaces
@@ -47,7 +47,8 @@ class MimicAgent(AbstractRLAgent):
 
     @classmethod
     def get_action_space(cls) -> gym.Space:
-        return spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
+        # Symmetric range is better behaved for PPO exploration.
+        return spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
 
     # ------------------------------------------------------------------
     # AbstractAgent interface
@@ -61,6 +62,7 @@ class MimicAgent(AbstractRLAgent):
 
     def initiate(self, opponent_name: Optional[str]) -> None:
         self._action = None
+        self._target_utility = 1.0
         self._mimic_target = 1.0
         self._last_t = 0.0
         self._shadow_accepted = False
@@ -79,6 +81,8 @@ class MimicAgent(AbstractRLAgent):
 
     def set_action(self, action: np.ndarray) -> None:
         self._action = action
+        raw = float(np.clip(action[0], -1.0, 1.0))
+        self._target_utility = 0.5 * (raw + 1.0)
 
     def build_observation(self) -> np.ndarray:
         return np.array([self._last_t], dtype=np.float32)
@@ -135,14 +139,14 @@ class MimicReward(AbstractRewardFunction):
 
         if env.last_our_bid is None:
             return 0.0
-        
+
         t = env.current_round / env.deadline_round
-        our_utility = float(env.our_agent._action[0])
+        our_utility = float(env.our_agent._target_utility)
 
         if our_utility > env.our_agent._mimic_target:
-            return (env.our_agent._mimic_target / (our_utility + 0.00001)) * t
+            return (env.our_agent._mimic_target / (our_utility + 0.00001))  * t
         else:
-            return (our_utility / (env.our_agent._mimic_target + 0.00001)) * t
+            return (our_utility / (env.our_agent._mimic_target + 0.00001)) 
         
 
     def terminal_reward(self, env) -> float:
