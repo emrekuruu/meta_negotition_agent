@@ -31,6 +31,7 @@ training:
   clip_range: 0.2
   ent_coef: 0.001           # slightly higher exploration on target head
   target_kl: 0.01         # SB3 PPO default (disabled)
+  policy_hidden_sizes: [128, 128, 64]
 
 logging:
   log_level: "INFO"

@@ -35,6 +35,7 @@ CONFIG = {
     "target_kl": config.training["target_kl"],
     "total_timesteps": int(config.training.get("total_timesteps", 200_000)),
     "device": config.core["device"],
+    "policy_hidden_sizes": config.training.get("policy_hidden_sizes", [128, 128, 64]),
 }
 
 
@@ -109,6 +110,13 @@ def main():
     probe_env.close()
 
     vec_env = build_vec_env()
+    policy_hidden_sizes = [int(size) for size in CONFIG["policy_hidden_sizes"]]
+    policy_kwargs = {
+        "net_arch": {
+            "pi": policy_hidden_sizes,
+            "vf": policy_hidden_sizes,
+        }
+    }
 
     model = PPO(
         "MlpPolicy",
@@ -125,6 +133,7 @@ def main():
         seed=CONFIG["seed"],
         device=CONFIG["device"],
         tensorboard_log=f"{run.dir}/tb",
+        policy_kwargs=policy_kwargs,
     )
 
     checkpoint_freq = int(config.logging.get("checkpoint_freq", 0))
