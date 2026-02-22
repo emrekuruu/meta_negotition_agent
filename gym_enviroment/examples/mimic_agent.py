@@ -12,6 +12,7 @@ from nenv import Offer, Accept
 from nenv.Action import Action
 from nenv.Agent import AbstractAgent
 from nenv.Bid import Bid
+from nenv.OpponentModel import BayesianOpponentModel
 
 from agents.HybridAgent.HybridAgent import HybridAgent
 
@@ -23,11 +24,13 @@ class MimicAgent(AbstractRLAgent):
     """
     RL agent that learns to reproduce the bidding curve of a reference strategy.
 
-    Observation space (2 + BID_WINDOW,):
+    Observation space (2 + 2 * BID_WINDOW,):
         [0] t                      -- normalised negotiation time in [0, 1]
         [1] last_our_offer_u       -- utility of our previous offer (own utility)
-        [2:] recent_opp_utils      -- last BID_WINDOW opponent bid utilities
+        [2:2+BID_WINDOW]           -- last BID_WINDOW opponent bid utilities
                                       in own-utility scale, zero-padded on the left
+        [2+BID_WINDOW:]            -- last BID_WINDOW estimated opponent-self utilities
+                                      from BayesianOpponentModel, zero-padded on the left
 
     Action space (1,):
         [0] normalized_target      -- normalized target in [-1, 1], mapped to
@@ -47,7 +50,7 @@ class MimicAgent(AbstractRLAgent):
 
     @classmethod
     def get_observation_space(cls) -> gym.Space:
-        return spaces.Box(low=0.0, high=1.0, shape=(2 + cls.BID_WINDOW,), dtype=np.float32)
+        return spaces.Box(low=0.0, high=1.0, shape=(2 + 2 * cls.BID_WINDOW,), dtype=np.float32)
 
     @classmethod
     def get_action_space(cls) -> gym.Space:
@@ -70,6 +73,8 @@ class MimicAgent(AbstractRLAgent):
         self._mimic_target = 1.0
         self._last_our_offer_utility = 1.0
         self._last_t = 0.0
+        self._opp_estimated_utils = []
+        self._opponent_model = BayesianOpponentModel(self.preference)
         self._shadow_accepted = False
         self._shadow_accept_round = None
         # Shadow instance — evolves in lockstep with the real negotiation
@@ -79,6 +84,8 @@ class MimicAgent(AbstractRLAgent):
     def receive_offer(self, bid: Bid, t: float) -> None:
         # Keep the shadow agent in sync so opponent-model-based strategies work correctly
         self._shadow.receive_bid(bid, t)
+        self._opponent_model.update(bid, t)
+        self._opp_estimated_utils.append(self._opponent_model.preference.get_utility(bid))
 
     # ------------------------------------------------------------------
     # RL interface
@@ -91,10 +98,13 @@ class MimicAgent(AbstractRLAgent):
 
     def build_observation(self) -> np.ndarray:
         opp_utils = [self.preference.get_utility(bid) for bid in self.last_received_bids]
-        recent = opp_utils[-self.BID_WINDOW:]
-        padded_recent = [0.0] * (self.BID_WINDOW - len(recent)) + recent
-        obs = [self._last_t, self._last_our_offer_utility] + padded_recent
-        print(f"Observation: t={obs[0]:.2f}, last_our_offer_u={obs[1]:.2f}, recent_opp_utils={obs[2:]}")
+        recent_our = opp_utils[-self.BID_WINDOW:]
+        padded_recent_our = [0.0] * (self.BID_WINDOW - len(recent_our)) + recent_our
+
+        recent_opp = self._opp_estimated_utils[-self.BID_WINDOW:]
+        padded_recent_opp = [0.0] * (self.BID_WINDOW - len(recent_opp)) + recent_opp
+
+        obs = [self._last_t, self._last_our_offer_utility] + padded_recent_our + padded_recent_opp
         return np.array(obs, dtype=np.float32)
 
     def act(self, t: float) -> Action:
@@ -148,6 +158,11 @@ class MimicReward(AbstractRewardFunction):
     Reward function paired with MimicAgent.
     """
 
+    def on_reset(self, env) -> None:
+        super().on_reset(env)
+        self._episode_dense_total = 0.0
+        self._dense_reward_per_episode_length = 0.0
+
     def dense_reward(self, env) -> float:
 
         if env.last_our_bid is None:
@@ -157,10 +172,21 @@ class MimicReward(AbstractRewardFunction):
         our_utility = float(env.our_agent._target_utility)
 
         if our_utility > env.our_agent._mimic_target:
-            return (env.our_agent._mimic_target / (our_utility + 0.00001))  * t
+            reward = (env.our_agent._mimic_target / (our_utility + 0.00001)) * t
         else:
-            return (our_utility / (env.our_agent._mimic_target + 0.00001)) 
+            reward = (our_utility / (env.our_agent._mimic_target + 0.00001))
+
+        self._episode_dense_total += reward
+        return reward
         
 
     def terminal_reward(self, env) -> float:
+        acceptance_round = env.current_round if env.agreement_reached else env.deadline_round
+        self._dense_reward_per_episode_length = self._episode_dense_total / max(acceptance_round, 1)
         return 0.0
+
+    def get_log_info(self) -> dict:
+        info = super().get_log_info()
+        info["dense_reward_total_episode"] = self._episode_dense_total
+        info["dense_reward_per_episode_length"] = self._dense_reward_per_episode_length
+        return info

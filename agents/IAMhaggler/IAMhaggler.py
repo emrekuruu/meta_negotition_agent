@@ -242,6 +242,11 @@ class IAMhaggler(nenv.AbstractAgent):
                     warnings.filterwarnings(
                         "ignore",
                         category=ConvergenceWarning,
+                        message=r".*k1__length_scale.*lower bound.*",
+                    )
+                    warnings.filterwarnings(
+                        "ignore",
+                        category=ConvergenceWarning,
                         message=r".*k2__noise_level is close to the specified lower bound.*",
                     )
                     self.gp.fit(X_train, y_train)

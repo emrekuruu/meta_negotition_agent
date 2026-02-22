@@ -89,8 +89,6 @@ class NegotiationEnv(gym.Env):
 
     def _get_info(self):
         info = {
-            "round": self.current_round,
-            "t": self.current_round / self.deadline_round,
             "domain": self.current_domain_name,
             "opponent": self.current_opponent_class.__name__,
             "agreement_reached": self.agreement_reached,

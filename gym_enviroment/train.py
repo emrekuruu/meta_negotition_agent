@@ -1,12 +1,15 @@
 import os
+import warnings
 
 import wandb
 from wandb.integration.sb3 import WandbCallback
+from sklearn.exceptions import ConvergenceWarning
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback, CallbackList
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.utils import safe_mean
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 from gym_enviroment.config.config import config
@@ -16,6 +19,13 @@ from gym_enviroment.env import NegotiationEnv
 # Plug in your agent and reward function here
 # ------------------------------------------------------------------
 from gym_enviroment.examples.mimic_agent import MimicAgent as MyRLAgent, MimicReward as MyRewardFunction
+
+# Silence sklearn GP bound-convergence spam from some built-in opponent agents.
+warnings.filterwarnings(
+    "ignore",
+    category=ConvergenceWarning,
+    module=r"sklearn\.gaussian_process\.kernels",
+)
 
 
 CONFIG = {
@@ -37,6 +47,22 @@ CONFIG = {
     "device": config.core["device"],
     "policy_hidden_sizes": config.training.get("policy_hidden_sizes", [128, 128, 64]),
 }
+
+class RolloutDensePerLenCallback(BaseCallback):
+    def _on_step(self) -> bool:
+        return True
+
+    def _on_rollout_end(self) -> None:
+        ep_info_buffer = getattr(self.model, "ep_info_buffer", None)
+        if not ep_info_buffer:
+            return
+        values = [
+            ep_info["dense_reward_per_episode_length"]
+            for ep_info in ep_info_buffer
+            if "dense_reward_per_episode_length" in ep_info
+        ]
+        if values:
+            self.logger.record("rollout/dense_reward_per_episode_length_mean", safe_mean(values))
 
 
 class ArtifactCheckpointCallback(BaseCallback):
@@ -78,7 +104,7 @@ def make_env_fn(rank: int):
             reward_fn=MyRewardFunction(),
         )
         env.reset(seed=CONFIG["seed"] + rank)
-        return Monitor(env)
+        return Monitor(env, info_keywords=("dense_reward_per_episode_length",))
 
     return _thunk
 
@@ -144,6 +170,8 @@ def main():
             checkpoint_freq=checkpoint_freq,
             save_path=f"{run.dir}/checkpoints",
         ))
+
+    callbacks.append(RolloutDensePerLenCallback())
 
     callbacks.append(WandbCallback(
         gradient_save_freq=0,

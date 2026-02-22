@@ -7,6 +7,7 @@ from nenv import Offer
 from nenv.Action import Action
 from nenv.Agent import AbstractAgent
 from nenv.Bid import Bid
+from nenv.OpponentModel import BayesianOpponentModel
 
 
 class TrainedMimicAgent(AbstractAgent):
@@ -20,7 +21,7 @@ class TrainedMimicAgent(AbstractAgent):
     The model is loaded once on first initiate() and shared across all sessions.
     """
 
-    artifact_path: str = "emre-kuru-zye-in-niversitesi/negotiation-rl/checkpoint-9iwphhmq-100000:v0"
+    artifact_path: str = "emre-kuru-zye-in-niversitesi/negotiation-rl/checkpoint-ger7py32-400000:v0"
     _model: ClassVar = None  # loaded once, shared across all instances
     BID_WINDOW: ClassVar[int] = 5
 
@@ -41,16 +42,22 @@ class TrainedMimicAgent(AbstractAgent):
 
         # Mirror training-time observation semantics.
         self._last_our_offer_utility = 1.0
+        self._opp_estimated_utils = []
+        self._opponent_model = BayesianOpponentModel(self.preference)
 
     def receive_offer(self, bid: Bid, t: float) -> None:
-        # No-op: this policy currently uses only time and bid-utility history.
-        pass
+        self._opponent_model.update(bid, t)
+        self._opp_estimated_utils.append(self._opponent_model.preference.get_utility(bid))
 
     def act(self, t: float) -> Action:
         opp_utils = [bid.utility for bid in self.last_received_bids]
-        recent = opp_utils[-self.BID_WINDOW:]
-        padded_recent = [0.0] * (self.BID_WINDOW - len(recent)) + recent
-        obs = np.array([t, self._last_our_offer_utility] + padded_recent, dtype=np.float32)
+        recent_our = opp_utils[-self.BID_WINDOW:]
+        padded_recent_our = [0.0] * (self.BID_WINDOW - len(recent_our)) + recent_our
+
+        recent_opp = self._opp_estimated_utils[-self.BID_WINDOW:]
+        padded_recent_opp = [0.0] * (self.BID_WINDOW - len(recent_opp)) + recent_opp
+
+        obs = np.array([t, self._last_our_offer_utility] + padded_recent_our + padded_recent_opp, dtype=np.float32)
 
         action, _ = self._model.predict(obs, deterministic=True)
         raw = float(np.clip(action[0], -1.0, 1.0))
