@@ -48,7 +48,7 @@ class GymConfig:
     @property
     def core(self) -> Dict:
         """Get core configuration section."""
-        self._config['core']['device'] = torch.device(self._config['core'].get('device', 'cpu'))
+        self._config['core']['device'] = "cuda" if torch.cuda.is_available() else "cpu"
         return self._config.get('core', {})
 
     @property
