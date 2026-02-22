@@ -50,7 +50,7 @@ meta_negotition_agent/
 │   ├── train.py                 # Training entry point (PPO via Stable-Baselines3)
 │   ├── config/
 │   │   ├── config.py            # Config loader
-│   │   └── default.yaml         # Training hyperparameters, domains, opponents
+│   │   └── training_config.yaml         # Training hyperparameters, domains, opponents
 │   ├── examples/                # Ready-to-run example agents
 │   │   └── mimic_agent.py       # MimicAgent — learns to replicate a reference strategy
 │   └── agent/                   # Your implementation lives here
@@ -58,7 +58,7 @@ meta_negotition_agent/
 │
 ├── domain_generator/            # Tool to generate new negotiation domains
 ├── run.py                       # Tournament entry point
-└── config.yaml                  # Tournament configuration
+└── tournament_config.yaml                  # Tournament configuration
 ```
 
 ---
@@ -77,7 +77,7 @@ pip install -r requirements.txt
 
 Tournaments evaluate agents head-to-head across negotiation domains using the stacked alternating offers protocol.
 
-### 1. Configure `config.yaml`
+### 1. Configure `tournament_config.yaml`
 
 ```yaml
 deadline_round: 1000
@@ -105,7 +105,7 @@ drawing_format: plotly
 ### 2. Run
 
 ```bash
-python run.py config.yaml
+python run.py tournament_config.yaml
 ```
 
 Results are written to `results/`.
@@ -170,7 +170,7 @@ class MyRewardFunction(AbstractRewardFunction):
         return env.final_utility
 ```
 
-### Step 2 — Configure `gym_enviroment/config/default.yaml`
+### Step 2 — Configure `gym_enviroment/config/training_config.yaml`
 
 Set your opponent pool, domains, deadline, and PPO hyperparameters. All agents in `opponents` must be importable subclasses of `AbstractAgent`.
 
@@ -184,9 +184,9 @@ Training usesStable-Baselines3 with vectorized environments. Each episode sample
 
 ---
 
-## Training Config (default.yaml)
+## Training Config (training_config.yaml)
 
-The default training config is centered on a single intuitive PPO sampling knob:
+The training configuration is centered on a single intuitive PPO sampling knob:
 
 - `training.rollout_buffer_size`
   - total samples per PPO update
@@ -203,7 +203,7 @@ Validation rules enforced at startup:
 - `rollout_buffer_size % batch_size == 0`
 - `batch_size <= rollout_buffer_size`
 
-This keeps the config simple for end users while preserving PPO correctness.
+This keeps the configuration simple for end users while preserving PPO correctness.
 
 ---
 
