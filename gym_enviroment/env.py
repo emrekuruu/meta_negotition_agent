@@ -59,6 +59,7 @@ class NegotiationEnv(gym.Env):
         # Load opponent classes and build the cycling combination list
         self.opponents = [load_agent_class(path) for path in opponent_names]
         self.combinations = list(itertools.product(self.domains, self.opponents))
+        self._combo_visit_counts = [0 for _ in self.combinations]
 
         # Spaces are declared by the agent class — no hardcoding here
         self.observation_space = our_agent_class.get_observation_space()
@@ -109,8 +110,14 @@ class NegotiationEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        # Sample a domain-opponent pair for this episode.
-        combo_idx = int(self.np_random.integers(len(self.combinations)))
+        # Balanced random sampling: choose among least-seen combinations.
+        min_count = min(self._combo_visit_counts)
+        candidate_indices = [
+            idx for idx, count in enumerate(self._combo_visit_counts) if count == min_count
+        ]
+        choice_idx = int(self.np_random.integers(len(candidate_indices)))
+        combo_idx = candidate_indices[choice_idx]
+        self._combo_visit_counts[combo_idx] += 1
         self.current_domain_name, self.current_opponent_class = self.combinations[combo_idx]
 
         # Load preferences for this domain

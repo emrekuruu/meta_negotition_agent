@@ -7,6 +7,7 @@ from nenv import Offer
 from nenv.Action import Action
 from nenv.Agent import AbstractAgent
 from nenv.Bid import Bid
+from agents.HybridAgent.HybridAgent import HybridAgent
 
 
 class TrainedMimicAgent(AbstractAgent):
@@ -20,8 +21,9 @@ class TrainedMimicAgent(AbstractAgent):
     The model is loaded once on first initiate() and shared across all sessions.
     """
 
-    artifact_path: str = "emre-kuru-zye-in-niversitesi/negotiation-rl/checkpoint-mkghnjmm-100000:v0"
+    artifact_path: str = "emre-kuru-zye-in-niversitesi/negotiation-rl/checkpoint-9iwphhmq-100000:v0"
     _model: ClassVar = None  # loaded once, shared across all instances
+    BID_WINDOW: ClassVar[int] = 4
 
     @property
     def name(self) -> str:
@@ -38,11 +40,23 @@ class TrainedMimicAgent(AbstractAgent):
             model_files = sorted(_glob.glob(f"{model_dir}/*.zip"))
             TrainedMimicAgent._model = PPO.load(model_files[-1])
 
+        # Mirror training-time observation semantics.
+        self._shadow = HybridAgent(self.preference, self.session_time, [])
+        self._shadow.initiate(opponent_name)
+        self._last_shadow_offer_utility = 1.0
+
     def receive_offer(self, bid: Bid, t: float) -> None:
-        pass
+        self._shadow.receive_bid(bid, t)
 
     def act(self, t: float) -> Action:
-        obs = np.array([t], dtype=np.float32)
+        shadow_action = self._shadow.act(t)
+        self._last_shadow_offer_utility = self.preference.get_utility(shadow_action.bid)
+
+        opp_utils = [bid.utility for bid in self.last_received_bids]
+        recent = opp_utils[-self.BID_WINDOW:]
+        padded_recent = [0.0] * (self.BID_WINDOW - len(recent)) + recent
+        obs = np.array([t, self._last_shadow_offer_utility] + padded_recent, dtype=np.float32)
+
         action, _ = self._model.predict(obs, deterministic=True)
         raw = float(np.clip(action[0], -1.0, 1.0))
         target = float(np.clip(0.5 * (raw + 1.0), self.preference.reservation_value, 1.0))

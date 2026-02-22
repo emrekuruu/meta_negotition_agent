@@ -11,6 +11,7 @@ deadline_round: 100
 agents: [ 
         "TrainedMimicAgent",
         "ConcederAgent", 
+        "HybridAgent", 
         ]
 
 ## Logger
@@ -34,7 +35,7 @@ loggers: ['BidSpaceLogger']
 #     "WHOLE": [14, 46, 11, 43, 13, 45, 10, 42, 7, 39, 9, 41, 12, 44, 6, 38, 5, 37]
 # }
 
-domains : ["30"]
+domains : ["23"]
 
 ## Opponent Model
 # You can define opponent models as a list of strings.

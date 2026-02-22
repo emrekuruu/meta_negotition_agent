@@ -23,8 +23,11 @@ class MimicAgent(AbstractRLAgent):
     """
     RL agent that learns to reproduce the bidding curve of a reference strategy.
 
-    Observation space (1,):
+    Observation space (2 + BID_WINDOW,):
         [0] t                      -- normalised negotiation time in [0, 1]
+        [1] last_shadow_offer_u    -- utility of the last shadow offer (own utility)
+        [2:] recent_opp_utils      -- last BID_WINDOW opponent bid utilities
+                                      in own-utility scale, zero-padded on the left
 
     Action space (1,):
         [0] normalized_target      -- normalized target in [-1, 1], mapped to
@@ -36,6 +39,7 @@ class MimicAgent(AbstractRLAgent):
     """
 
     mimic_class: Type[AbstractAgent] = HybridAgent
+    BID_WINDOW: int = 4
 
     # ------------------------------------------------------------------
     # Spaces
@@ -43,7 +47,7 @@ class MimicAgent(AbstractRLAgent):
 
     @classmethod
     def get_observation_space(cls) -> gym.Space:
-        return spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
+        return spaces.Box(low=0.0, high=1.0, shape=(2 + cls.BID_WINDOW,), dtype=np.float32)
 
     @classmethod
     def get_action_space(cls) -> gym.Space:
@@ -64,6 +68,7 @@ class MimicAgent(AbstractRLAgent):
         self._action = None
         self._target_utility = 1.0
         self._mimic_target = 1.0
+        self._last_shadow_offer_utility = 1.0
         self._last_t = 0.0
         self._shadow_accepted = False
         self._shadow_accept_round = None
@@ -85,7 +90,11 @@ class MimicAgent(AbstractRLAgent):
         self._target_utility = 0.5 * (raw + 1.0)
 
     def build_observation(self) -> np.ndarray:
-        return np.array([self._last_t], dtype=np.float32)
+        opp_utils = [bid.utility for bid in self.last_received_bids]
+        recent = opp_utils[-self.BID_WINDOW:]
+        padded_recent = [0.0] * (self.BID_WINDOW - len(recent)) + recent
+        obs = [self._last_t, self._last_shadow_offer_utility] + padded_recent
+        return np.array(obs, dtype=np.float32)
 
     def act(self, t: float) -> Action:
         self._last_t = t
@@ -98,6 +107,9 @@ class MimicAgent(AbstractRLAgent):
                 self._shadow_accept_round = round(t * self.session_time)
         else:
             self._mimic_target = self.preference.get_utility(shadow_action.bid)
+            self._last_shadow_offer_utility = self._mimic_target
+
+        self._target_utility = self.preference.get_bid_at(self._target_utility).utility
         
         return shadow_action
 

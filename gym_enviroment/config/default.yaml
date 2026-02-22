@@ -4,26 +4,37 @@ core:
 environment:
   n_envs: 1
   deadline_round: 100
-  domains: ['30']
+  domains: ['5', '6', '7', '9', '10', '11', '12',
+            '13', '14', '21', '22', '23', '25', '26', '27', '28', '29',
+            '30', '37', '38', '39' ]
 
   opponents: [ 
-               "agents.ConcederAgent",
-              ]
+        "ConcederAgent", 
+        "BoulwareAgent",
+        "HybridAgent",
+        "CUHKAgent",
+        "MICROAgent", 
+        "SAGAAgent", 
+        "NiceTitForTat",
+        "IAMhaggler",
+        "HardHeaded",
+        "PonPokoAgent",
+        ]
 
 training:
-  total_timesteps: 100000
+  total_timesteps: 10000000
   learning_rate: 5.0e-4   # SB3 PPO default
   n_steps: 256           # SB3 PPO default
   batch_size: 16          # SB3 PPO default
   n_epochs: 10            # SB3 PPO default
   gamma: 0.99             # SB3 PPO default
   clip_range: 0.2
-  ent_coef: 0.05           # slightly higher exploration on target head
-  target_kl: null         # SB3 PPO default (disabled)
+  ent_coef: 0.001           # slightly higher exploration on target head
+  target_kl: 0.01         # SB3 PPO default (disabled)
 
 logging:
   log_level: "INFO"
   wandb:
     project: "negotiation-rl"
     entity: null
-  checkpoint_freq: 10000  # save a model artifact every N timesteps
+  checkpoint_freq: 100000  # save a model artifact every N timesteps

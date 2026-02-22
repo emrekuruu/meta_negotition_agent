@@ -39,7 +39,7 @@ class BayesianOpponentModel(AbstractOpponentModel):
         self.minUtility = None
         self.maxUtility = None
         self._isCrashed = False
-        self.deadline_round = int(os.getenv("DEADLINE_ROUND"))
+        self.deadline_round = int(os.getenv("DEADLINE_ROUND",100))
         self.initWeightHyps()
 
         self.fEvaluatorHyps = []
