@@ -141,7 +141,6 @@ class MimicAgent(AbstractRLAgent):
             *self._opponent_type_onehot,
         ]
 
-        print(f"Opponent: {self._opponent_type_onehot}")
         return np.array(obs, dtype=np.float32)
 
     def act(self, t: float) -> Action:

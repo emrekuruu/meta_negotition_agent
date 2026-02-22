@@ -49,8 +49,59 @@ CONFIG = {
 }
 
 class RolloutNormalizedDenseCallback(BaseCallback):
+    def __init__(self):
+        super().__init__()
+        self._episode_count_by_opponent = {}
+        self._episode_count_by_domain = {}
+
     def _on_step(self) -> bool:
+        infos = self.locals.get("infos", [])
+        dones = self.locals.get("dones", [])
+
+        for info, done in zip(infos, dones):
+            if not done:
+                continue
+
+            opponent = str(info.get("opponent", "unknown"))
+            domain = str(info.get("domain", "unknown"))
+
+            self._episode_count_by_opponent[opponent] = self._episode_count_by_opponent.get(opponent, 0) + 1
+            self._episode_count_by_domain[domain] = self._episode_count_by_domain.get(domain, 0) + 1
+
         return True
+
+    def _log_coverage_bars(self) -> None:
+        if self._episode_count_by_opponent:
+            opponent_table = wandb.Table(columns=["opponent", "episodes"])
+            for opponent, count in sorted(self._episode_count_by_opponent.items(), key=lambda item: item[0]):
+                opponent_table.add_data(opponent, count)
+            wandb.log(
+                {
+                    "coverage/episodes_by_opponent": wandb.plot.bar(
+                        opponent_table,
+                        "opponent",
+                        "episodes",
+                        title="Episode Coverage by Opponent",
+                    )
+                },
+                step=self.num_timesteps,
+            )
+
+        if self._episode_count_by_domain:
+            domain_table = wandb.Table(columns=["domain", "episodes"])
+            for domain, count in sorted(self._episode_count_by_domain.items(), key=lambda item: item[0]):
+                domain_table.add_data(domain, count)
+            wandb.log(
+                {
+                    "coverage/episodes_by_domain": wandb.plot.bar(
+                        domain_table,
+                        "domain",
+                        "episodes",
+                        title="Episode Coverage by Domain",
+                    )
+                },
+                step=self.num_timesteps,
+            )
 
     def _on_rollout_end(self) -> None:
         ep_info_buffer = getattr(self.model, "ep_info_buffer", None)
@@ -63,6 +114,7 @@ class RolloutNormalizedDenseCallback(BaseCallback):
         ]
         if values:
             self.logger.record("rollout/normalized_total_dense_reward_mean", safe_mean(values))
+        self._log_coverage_bars()
 
 
 class ArtifactCheckpointCallback(BaseCallback):
